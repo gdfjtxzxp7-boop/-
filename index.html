@@ -205,7 +205,7 @@
   const KEY='gem_inventory_v4';
   const FEE_RATE=0.10, SHIP_FEE=200;
 
-  // 比較ユーティリティ（iOS Safari/PWAで安定動作）
+  // 安定比較ユーティリティ
   const hasCollator = (typeof Intl !== 'undefined' && typeof Intl.Collator === 'function');
   const collator = hasCollator ? new Intl.Collator('ja', { numeric:true, sensitivity:'base' }) : null;
   const isYMD = (s)=> /^\d{4}-\d{2}-\d{2}$/.test(s||'');
@@ -369,26 +369,45 @@
     const fs=$('#filterStatus').value;
     const sort=$('#sort').value;
 
+    // 元配列のインデックスをタイブレークに利用（古い順と新しい順で逆転）
+    const pos = new Map();
+    items.forEach((it, ix)=> pos.set(it.id, ix));
+
     let rows=items.filter(i=> (i.name+i.tag+i.platform).toLowerCase().includes(q) && (fs==='ALL'||i.status===fs) );
     const gpv=(i)=>profit(i);
 
-    // 安定比較でソート
     switch (sort){
-      case 'created_desc':
-        rows.sort((a,b)=> cmpStrDesc(dateKey(a.createdAt), dateKey(b.createdAt)));
+      case 'created_desc': {
+        rows.sort((a,b)=>{
+          const c = cmpStrDesc(dateKey(a.createdAt), dateKey(b.createdAt));
+          return c!==0 ? c : (pos.get(a.id) - pos.get(b.id)); // 同日→元順（新しい方=小さいindexが先頭）
+        });
         break;
-      case 'created_asc':
-        rows.sort((a,b)=> cmpStrAsc(dateKey(a.createdAt), dateKey(b.createdAt)));
+      }
+      case 'created_asc': {
+        rows.sort((a,b)=>{
+          const c = cmpStrAsc(dateKey(a.createdAt), dateKey(b.createdAt));
+          return c!==0 ? c : (pos.get(b.id) - pos.get(a.id)); // 同日→元順の逆（古い方=大きいindexを先頭）
+        });
         break;
+      }
       case 'name_asc':
         rows.sort((a,b)=> cmpStrAsc(a.name||'', b.name||''));
         break;
-      case 'sold_desc':
-        rows.sort((a,b)=> cmpStrDesc(dateKey(a.soldAt), dateKey(b.soldAt)));
+      case 'sold_desc': {
+        rows.sort((a,b)=>{
+          const c = cmpStrDesc(dateKey(a.soldAt), dateKey(b.soldAt));
+          return c!==0 ? c : (pos.get(a.id) - pos.get(b.id));
+        });
         break;
-      case 'sold_asc':
-        rows.sort((a,b)=> cmpStrAsc(dateKey(a.soldAt), dateKey(b.soldAt)));
+      }
+      case 'sold_asc': {
+        rows.sort((a,b)=>{
+          const c = cmpStrAsc(dateKey(a.soldAt), dateKey(b.soldAt));
+          return c!==0 ? c : (pos.get(b.id) - pos.get(a.id));
+        });
         break;
+      }
       case 'profit_desc':
         rows.sort((a,b)=> cmpNumDesc(gpv(a), gpv(b)));
         break;
@@ -399,7 +418,10 @@
         rows.sort((a,b)=> (stOrder[a.status]??99) - (stOrder[b.status]??99));
         break;
       default:
-        rows.sort((a,b)=> cmpStrDesc(dateKey(a.createdAt), dateKey(b.createdAt)));
+        rows.sort((a,b)=>{
+          const c = cmpStrDesc(dateKey(a.createdAt), dateKey(b.createdAt));
+          return c!==0 ? c : (pos.get(a.id) - pos.get(b.id));
+        });
         break;
     }
 
