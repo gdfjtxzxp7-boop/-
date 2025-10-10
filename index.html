@@ -205,7 +205,22 @@
   const KEY='gem_inventory_v4';
   const FEE_RATE=0.10, SHIP_FEE=200;
 
-  const todayLocal = ()=>{ const d=new Date(); const y=d.getFullYear(), m=('0'+(d.getMonth()+1)).slice(-2), day=('0'+d.getDate()).slice(-2); return `${y}-${m}-${day}`; };
+  // 比較ユーティリティ（iOS Safari/PWAで安定動作）
+  const hasCollator = (typeof Intl !== 'undefined' && typeof Intl.Collator === 'function');
+  const collator = hasCollator ? new Intl.Collator('ja', { numeric:true, sensitivity:'base' }) : null;
+  const isYMD = (s)=> /^\d{4}-\d{2}-\d{2}$/.test(s||'');
+  const dateKey = (s)=> isYMD(s) ? s : '';
+  const cmpStrAsc  = (a,b)=> collator ? collator.compare(a||'', b||'') : String(a||'').localeCompare(b||'', 'ja');
+  const cmpStrDesc = (a,b)=> collator ? collator.compare(b||'', a||'') : String(b||'').localeCompare(a||'', 'ja');
+  const cmpNumAsc  = (a,b)=> (Number(a)||0) - (Number(b)||0);
+  const cmpNumDesc = (a,b)=> (Number(b)||0) - (Number(a)||0);
+  const stOrder = {'在庫':0,'出品':1,'オークション':2,'売却':3};
+
+  const todayLocal = ()=>{
+    const d=new Date();
+    const y=d.getFullYear(), m=('0'+(d.getMonth()+1)).slice(-2), day=('0'+d.getDate()).slice(-2);
+    return `${y}-${m}-${day}`;
+  };
   const yen=(n)=> (Math.round(Number(n)||0)).toLocaleString('ja-JP',{style:'currency',currency:'JPY',maximumFractionDigits:0});
   const parseNum=(v)=> Math.max(0, Math.round(Number((v+'').replace(/[^\d.-]/g,''))||0));
   const uid=()=> Math.random().toString(36).slice(2,10)+Date.now().toString(36).slice(-4);
@@ -214,7 +229,12 @@
   let undoStack=[], redoStack=[];
   let prevStateJSON='';
 
-  function load(){ try{ const raw=localStorage.getItem(KEY); return raw?JSON.parse(raw):[]; }catch(_){ return []; } }
+  function load(){
+    try{
+      const raw=localStorage.getItem(KEY);
+      return raw?JSON.parse(raw):[];
+    }catch(_){ return []; }
+  }
   function save(withHistory=true){
     if(withHistory){
       if(prevStateJSON) undoStack.push(prevStateJSON);
@@ -309,7 +329,7 @@
     const tag=addTag.value.trim();
     save(true);
     items.unshift({ id:uid(), name, cost, price, platform, tag, status:'在庫', createdAt:todayLocal(), soldAt:'', soldPrice:null });
-    localStorage.setItem(KEY, JSON.stringify(items));
+    save(false);
     render();
     closeAdd();
   });
@@ -317,8 +337,6 @@
   $('#q').addEventListener('input', render);
   $('#filterStatus').addEventListener('change', render);
   $('#sort').addEventListener('change', render);
-
-  function dateKey(s){ return s && /^\\d{4}-\\d{2}-\\d{2}$/.test(s) ? s : ''; }
 
   // 削除確認モーダル
   const cBack=$('#confirmBack'), cText=$('#confirmText'), cOk=$('#confirmOk'), cCancel=$('#confirmCancel'), cClose=$('#confirmClose');
@@ -338,7 +356,7 @@
     if(!pendingDeleteId) return;
     save(true);
     items = items.filter(x=>x.id!==pendingDeleteId);
-    localStorage.setItem(KEY, JSON.stringify(items));
+    save(false);
     closeConfirm();
     render();
   });
@@ -352,16 +370,38 @@
     const sort=$('#sort').value;
 
     let rows=items.filter(i=> (i.name+i.tag+i.platform).toLowerCase().includes(q) && (fs==='ALL'||i.status===fs) );
-    const gp=(i)=>profit(i);
+    const gpv=(i)=>profit(i);
 
-    if(sort==='created_desc') rows.sort((a,b)=> (b.createdAt>a.createdAt?1:-1));
-    if(sort==='created_asc') rows.sort((a,b)=> (a.createdAt>b.createdAt?1:-1));
-    if(sort==='name_asc') rows.sort((a,b)=> (a.name||'').localeCompare(b.name||'','ja'));
-    if(sort==='sold_desc') rows.sort((a,b)=> (dateKey(b.soldAt)>dateKey(a.soldAt)?1:-1));
-    if(sort==='sold_asc') rows.sort((a,b)=> (dateKey(a.soldAt)>dateKey(b.soldAt)?1:-1));
-    if(sort==='profit_desc') rows.sort((a,b)=> gp(b)-gp(a));
-    if(sort==='price_desc') rows.sort((a,b)=> (parseNum(b.price)||0)-(parseNum(a.price)||0));
-    if(sort==='status') rows.sort((a,b)=> ['在庫','出品','オークション','売却'].indexOf(a.status)-['在庫','出品','オークション','売却'].indexOf(b.status));
+    // 安定比較でソート
+    switch (sort){
+      case 'created_desc':
+        rows.sort((a,b)=> cmpStrDesc(dateKey(a.createdAt), dateKey(b.createdAt)));
+        break;
+      case 'created_asc':
+        rows.sort((a,b)=> cmpStrAsc(dateKey(a.createdAt), dateKey(b.createdAt)));
+        break;
+      case 'name_asc':
+        rows.sort((a,b)=> cmpStrAsc(a.name||'', b.name||''));
+        break;
+      case 'sold_desc':
+        rows.sort((a,b)=> cmpStrDesc(dateKey(a.soldAt), dateKey(b.soldAt)));
+        break;
+      case 'sold_asc':
+        rows.sort((a,b)=> cmpStrAsc(dateKey(a.soldAt), dateKey(b.soldAt)));
+        break;
+      case 'profit_desc':
+        rows.sort((a,b)=> cmpNumDesc(gpv(a), gpv(b)));
+        break;
+      case 'price_desc':
+        rows.sort((a,b)=> cmpNumDesc(parseNum(a.price), parseNum(b.price)));
+        break;
+      case 'status':
+        rows.sort((a,b)=> (stOrder[a.status]??99) - (stOrder[b.status]??99));
+        break;
+      default:
+        rows.sort((a,b)=> cmpStrDesc(dateKey(a.createdAt), dateKey(b.createdAt)));
+        break;
+    }
 
     const tbody=document.getElementById('body'); tbody.innerHTML='';
     rows.forEach(i=>{
@@ -376,7 +416,7 @@
           i.status=st;
           if(st==='売却'){ i.soldAt=i.soldAt||todayLocal(); i.soldPrice=parseNum(i.price)||0; }
           else { i.soldAt=''; i.soldPrice=null; }
-          localStorage.setItem(KEY, JSON.stringify(items)); render();
+          save(false); render();
         });
         seg.appendChild(b);
       });
@@ -384,29 +424,29 @@
 
       const tdName=document.createElement('td'); tdName.setAttribute('data-label','名称');
       tdName.contentEditable='true'; tdName.textContent=i.name;
-      tdName.addEventListener('blur',()=>{ 
+      tdName.addEventListener('blur',()=>{
         const nv=tdName.textContent.trim();
-        if(i.name!==nv){ save(true); i.name=nv; localStorage.setItem(KEY, JSON.stringify(items)); render(); }
+        if(i.name!==nv){ save(true); i.name=nv; save(false); render(); }
       });
       tr.appendChild(tdName);
 
       const tdPlat=document.createElement('td'); tdPlat.setAttribute('data-label','売場');
       const sel=document.createElement('select');
       ['未設定','メルカリ','ヤフオク','その他'].forEach(p=>{ const op=document.createElement('option'); op.value=p; op.textContent=p; if(p===i.platform) op.selected=true; sel.appendChild(op); });
-      sel.addEventListener('change',()=>{ save(true); i.platform=sel.value; localStorage.setItem(KEY, JSON.stringify(items)); render(); });
+      sel.addEventListener('change',()=>{ save(true); i.platform=sel.value; save(false); render(); });
       tdPlat.appendChild(sel); tr.appendChild(tdPlat);
 
       const tdTag=document.createElement('td'); tdTag.setAttribute('data-label','タグ');
       tdTag.contentEditable='true'; tdTag.textContent=i.tag||'';
-      tdTag.addEventListener('blur',()=>{ 
+      tdTag.addEventListener('blur',()=>{
         const nv=tdTag.textContent.trim();
-        if(i.tag!==nv){ save(true); i.tag=nv; localStorage.setItem(KEY, JSON.stringify(items)); render(); }
+        if(i.tag!==nv){ save(true); i.tag=nv; save(false); render(); }
       });
       tr.appendChild(tdTag);
 
       const tdCost=document.createElement('td'); tdCost.className='num'; tdCost.setAttribute('data-label','仕入');
       const inCost=document.createElement('input'); inCost.type='number'; inCost.value=i.cost||0; inCost.min=0; inCost.step=100;
-      inCost.addEventListener('change',()=>{ save(true); i.cost=parseNum(inCost.value); localStorage.setItem(KEY, JSON.stringify(items)); render(); });
+      inCost.addEventListener('change',()=>{ save(true); i.cost=parseNum(inCost.value); save(false); render(); });
       tdCost.appendChild(inCost); tr.appendChild(tdCost);
 
       const tdPrice=document.createElement('td'); tdPrice.className='num'; tdPrice.setAttribute('data-label','価格（出品/売却）');
@@ -416,12 +456,12 @@
         save(true);
         const val=parseNum(inPrice.value);
         if(i.status==='売却'){ i.soldPrice=val; } else { i.price=val; }
-        localStorage.setItem(KEY, JSON.stringify(items)); render();
+        save(false); render();
       });
       tdPrice.appendChild(inPrice); tr.appendChild(tdPrice);
 
       const tdProfit=document.createElement('td'); tdProfit.className='num'; tdProfit.setAttribute('data-label','粗利');
-      const gp=profit(i); tdProfit.textContent=yen(gp); tdProfit.classList.add(gp>=0?'ok':'bad'); tr.appendChild(tdProfit);
+      const g=profit(i); tdProfit.textContent=yen(g); tdProfit.classList.add(g>=0?'ok':'bad'); tr.appendChild(tdProfit);
 
       const tdSt=document.createElement('td'); tdSt.setAttribute('data-label','ステータス');
       const pill=document.createElement('span'); pill.className='pill';
@@ -430,7 +470,7 @@
 
       const tdSold=document.createElement('td'); tdSold.setAttribute('data-label','売却日');
       const date=document.createElement('input'); date.type='date'; date.value=i.soldAt||'';
-      date.addEventListener('change',()=>{ save(true); i.soldAt=date.value; localStorage.setItem(KEY, JSON.stringify(items)); render(); });
+      date.addEventListener('change',()=>{ save(true); i.soldAt=date.value; save(false); render(); });
       tdSold.appendChild(date); tr.appendChild(tdSold);
 
       const tdDel=document.createElement('td'); tdDel.className='actions'; tdDel.setAttribute('data-label','');
