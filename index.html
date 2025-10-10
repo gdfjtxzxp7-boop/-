@@ -1,0 +1,450 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>在庫管理システム</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root{ --bg:#0f1115; --panel:#171a21; --muted:#9aa4b2; --text:#e6e9ef; --accent:#6ae3ff; --line:#232734; --good:#7ee787; --bad:#ff6b6b; }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+  header{position:sticky;top:0;z-index:10;background:linear-gradient(180deg,var(--bg),rgba(15,17,21,.9))}
+  h1{margin:14px 12px 8px;font-size:20px;letter-spacing:.3px}
+  .grid{display:grid;gap:12px;padding:12px}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px}
+  .row{display:flex;gap:8px;flex-wrap:wrap}
+  input,select,button{background:#0d0f14;color:var(--text);border:1px solid var(--line);border-radius:10px;padding:10px;font-size:14px;touch-action:manipulation}
+  input[type="number"]{width:120px}
+  input[type="text"]{min-width:180px}
+  button{cursor:pointer}
+  table{width:100%;border-collapse:collapse}
+  th,td{border-bottom:1px solid var(--line);padding:8px;text-align:left;vertical-align:middle}
+  th{position:sticky;top:64px;background:var(--panel);z-index:5}
+  td.num{text-align:right}
+  .muted{color:var(--muted)}
+  .pill{padding:4px 8px;border-radius:999px;border:1px solid var(--line);font-size:12px}
+  .pill.stock{color:#9ccaff}.pill.listed{color:#b5f39f}.pill.auct{color:#ffd68a}.pill.sold{color:#ff9fb3}
+  .ok{color:var(--good)} .bad{color:var(--bad)}
+  .toolbar{display:flex;gap:8px;flex-wrap:wrap}
+  .right{margin-left:auto}
+  .narrow{max-width:1100px;margin:0 auto}
+  .checkbox{width:18px;height:18px}
+
+  .fab{position:fixed;right:20px;bottom:20px;z-index:60;background:#2563eb;border:none;color:white;
+       padding:14px 18px;border-radius:999px;font-weight:700;box-shadow:0 10px 24px rgba(0,0,0,.35)}
+  .fab:active{transform:translateY(1px)}
+
+  .modal-back{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;place-items:center;z-index:70}
+  .modal{width:min(720px,92vw);background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px}
+  .modal.small{width:min(420px,92vw)}
+  .modal header{display:flex;justify-content:space-between;align-items:center;background:transparent;padding:0 0 8px;border-bottom:1px solid var(--line)}
+  .modal h2{margin:0;font-size:16px}
+  .modal .body{display:grid;gap:10px;margin-top:10px}
+  .modal .row{display:flex;gap:8px;flex-wrap:wrap}
+  .modal .actions{display:flex;gap:8px;justify-content:flex-end;margin-top:8px}
+  .btn-primary{background:#3b82f6;border:0}
+  .btn-danger{background:#ef4444;border:0}
+  .btn-ghost{background:transparent}
+  .invalid{border-color:#ef4444 !important;box-shadow:0 0 0 2px rgba(239,68,68,.25)}
+
+  .seg{display:flex;gap:6px;flex-wrap:wrap}
+  .seg button{border:1px solid var(--line);background:#0d0f14;color:var(--text);padding:8px 10px;border-radius:8px;font-size:13px}
+  .seg button.on{background:#1e293b;border-color:#3b82f6;outline:2px solid #3b82f6}
+
+  .metrics{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .chip{border:1px solid var(--line);border-radius:999px;padding:4px 10px;font-size:12px;color:var(--muted)}
+  .metrics .toggle{margin-left:auto}
+  .iconbtn{width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;border-radius:999px;
+           border:1px solid var(--line);background:#0d0f14}
+  .iconbtn[disabled]{opacity:.4;pointer-events:none}
+
+  .kpi{display:none;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+  .kpi .panel{padding:10px}
+  .kpi h3{margin:0 0 6px;font-size:12px;color:var(--muted);font-weight:600}
+  .kpi .num{font-size:18px;font-weight:800}
+
+  @media (max-width: 640px){
+    h1{font-size:18px;margin:12px}
+    th{top:72px}
+    .toolbar .row>*{flex:1 1 100%}
+    table, thead, tbody, th, td, tr{display:block}
+    thead{display:none}
+    tbody tr{margin:10px 0;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--panel)}
+    tbody td{display:flex;gap:12px;align-items:center;justify-content:space-between;border-bottom:0;padding:6px 0;position:relative}
+    tbody td::before{content:attr(data-label);color:var(--muted);min-width:7em;pointer-events:none}
+    tbody td.actions{padding-top:10px}
+    tbody td.ops{order:-1}
+    .seg button{padding:10px 12px}
+    .actions button{min-width:96px}
+  }
+</style>
+</head>
+<body>
+<header class="narrow">
+  <h1>在庫管理システム</h1>
+  <div class="grid">
+    <div class="panel toolbar">
+      <div class="row right">
+        <input id="q" type="text" placeholder="検索（名称/タグ/売場）">
+        <select id="filterStatus">
+          <option value="ALL">全ステータス</option><option value="在庫">在庫</option>
+          <option value="出品">出品</option><option value="オークション">オークション</option><option value="売却">売却</option>
+        </select>
+        <select id="sort">
+          <option value="created_desc">新しい順</option>
+          <option value="created_asc">古い順</option>
+          <option value="name_asc">名前順</option>
+          <option value="sold_desc">売却日順（新→旧）</option>
+          <option value="sold_asc">売却日順（旧→新）</option>
+          <option value="profit_desc">粗利高い順</option>
+          <option value="price_desc">価格高い順</option>
+          <option value="status">ステータス順</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="panel metrics" id="metricsBar">
+      <span class="chip">在庫 <b id="m_items">0</b></span>
+      <span class="chip">原価 <b id="m_invCost">¥0</b></span>
+      <span class="chip">粗利 <b id="m_profit">¥0</b></span>
+      <button id="undoBtn" class="iconbtn" title="元に戻す（Undo）" aria-label="Undo">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+          <path d="M9 7L4 12L9 17" stroke="#cbd5e1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M20 18a8 8 0 0 0-8-8H4" stroke="#cbd5e1" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </button>
+      <button id="redoBtn" class="iconbtn" title="やり直す（Redo）" aria-label="Redo">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+          <path d="M15 7L20 12L15 17" stroke="#cbd5e1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M4 18a8 8 0 0 1 8-8h8" stroke="#cbd5e1" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </button>
+      <button id="toggleKPI" class="chip toggle">詳細</button>
+    </div>
+
+    <div class="kpi narrow" id="kpiGrid">
+      <div class="panel"><h3>在庫点数</h3><div class="num" id="k_items">0</div></div>
+      <div class="panel"><h3>在庫原価合計</h3><div class="num" id="k_invCost">0</div></div>
+      <div class="panel"><h3>手取り売上（実現）</h3><div class="num" id="k_netSales">0</div></div>
+      <div class="panel"><h3>実現粗利（控除後）</h3><div class="num" id="k_profit">0</div></div>
+      <div class="panel"><h3>見込み粗利（在庫）</h3><div class="num" id="k_upside">0</div></div>
+    </div>
+  </div>
+</header>
+
+<main class="grid narrow">
+  <div class="panel">
+    <table id="tbl">
+      <thead>
+        <tr>
+          <th>操作</th>
+          <th>名称</th>
+          <th>売場</th>
+          <th>タグ</th>
+          <th class="nowrap">仕入</th>
+          <th class="nowrap">価格（出品/売却）</th>
+          <th class="nowrap">粗利</th>
+          <th>ステータス</th>
+          <th class="nowrap">売却日</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="body"></tbody>
+    </table>
+  </div>
+</main>
+
+<button id="fabAdd" class="fab">＋ 追加</button>
+<div id="addBack" class="modal-back" aria-hidden="true">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="addTitle">
+    <header>
+      <h2 id="addTitle">新規アイテム</h2>
+      <button id="addClose" class="btn-ghost">✕</button>
+    </header>
+    <div class="body">
+      <div class="row">
+        <input id="addName" type="text" placeholder="名称（必須）">
+        <input id="addCost" type="number" inputmode="numeric" min="0" step="100" placeholder="仕入れ値（必須・0可）">
+        <input id="addPrice" type="number" inputmode="numeric" min="0" step="100" placeholder="販売価格（必須）">
+      </div>
+      <div class="row">
+        <select id="addPlatform">
+          <option value="未設定">売場（必須）</option><option>メルカリ</option><option>ヤフオク</option><option>その他</option>
+        </select>
+        <input id="addTag" type="text" placeholder="タグ（任意）">
+      </div>
+      <div class="actions">
+        <button id="addCancel" class="btn-ghost">キャンセル</button>
+        <button id="addSave" class="btn-primary">保存</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 削除確認モーダル -->
+<div id="confirmBack" class="modal-back" aria-hidden="true">
+  <div class="modal small" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
+    <header>
+      <h2 id="confirmTitle">削除確認</h2>
+      <button id="confirmClose" class="btn-ghost">✕</button>
+    </header>
+    <div class="body">
+      <div id="confirmText" class="muted">このアイテムを削除する？</div>
+      <div class="actions">
+        <button id="confirmCancel" class="btn-ghost">キャンセル</button>
+        <button id="confirmOk" class="btn-danger">削除</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(()=> {
+  const $ = (q)=>document.querySelector(q);
+  const KEY='gem_inventory_v4';
+  const FEE_RATE=0.10, SHIP_FEE=200;
+
+  const todayLocal = ()=>{ const d=new Date(); const y=d.getFullYear(), m=('0'+(d.getMonth()+1)).slice(-2), day=('0'+d.getDate()).slice(-2); return `${y}-${m}-${day}`; };
+  const yen=(n)=> (Math.round(Number(n)||0)).toLocaleString('ja-JP',{style:'currency',currency:'JPY',maximumFractionDigits:0});
+  const parseNum=(v)=> Math.max(0, Math.round(Number((v+'').replace(/[^\d.-]/g,''))||0));
+  const uid=()=> Math.random().toString(36).slice(2,10)+Date.now().toString(36).slice(-4);
+
+  let items = load();
+  let undoStack=[], redoStack=[];
+  let prevStateJSON='';
+
+  function load(){ try{ const raw=localStorage.getItem(KEY); return raw?JSON.parse(raw):[]; }catch(_){ return []; } }
+  function save(withHistory=true){
+    if(withHistory){
+      if(prevStateJSON) undoStack.push(prevStateJSON);
+      redoStack.length=0;
+      updateUndoUI();
+    }
+    localStorage.setItem(KEY, JSON.stringify(items));
+  }
+  function updateUndoUI(){
+    $('#undoBtn').disabled = undoStack.length===0;
+    $('#redoBtn').disabled = redoStack.length===0;
+  }
+  function doUndo(){
+    if(undoStack.length===0) return;
+    redoStack.push(JSON.stringify(items));
+    items = JSON.parse(undoStack.pop());
+    save(false); render();
+  }
+  function doRedo(){
+    if(redoStack.length===0) return;
+    undoStack.push(JSON.stringify(items));
+    items = JSON.parse(redoStack.pop());
+    save(false); render();
+  }
+  $('#undoBtn').addEventListener('click',doUndo);
+  $('#redoBtn').addEventListener('click',doRedo);
+  updateUndoUI();
+
+  const effectivePrice = (i)=> parseNum(i.status==='売却' ? (i.soldPrice ?? i.price) : i.price);
+  const net = (price)=> Math.max(0, Math.round(parseNum(price) * (1 - FEE_RATE) - SHIP_FEE));
+  const profit = (i)=> net(effectivePrice(i)) - parseNum(i.cost);
+
+  function calcKPI(){
+    const inv=items.filter(i=>i.status!=='売却');
+    const sold=items.filter(i=>i.status==='売却');
+    const invCost=inv.reduce((a,b)=>a+parseNum(b.cost),0);
+    const netSales=sold.reduce((a,b)=>a+net(b.soldPrice??b.price),0);
+    const realized=sold.reduce((a,b)=>a+profit(b),0);
+    const upside=inv.reduce((a,b)=>a+profit(b),0);
+    $('#k_items').textContent=inv.length;
+    $('#k_invCost').textContent=yen(invCost);
+    $('#k_netSales').textContent=yen(netSales);
+    $('#k_profit').textContent=yen(realized);
+    const u=$('#k_upside'); if(u){u.textContent=yen(upside); u.classList.toggle('ok',upside>0); u.classList.toggle('bad',upside<0);}
+    $('#m_items').textContent=inv.length;
+    $('#m_invCost').textContent=yen(invCost);
+    $('#m_profit').textContent=yen(realized);
+  }
+
+  const toggleBtn = $('#toggleKPI');
+  const kpiGrid = $('#kpiGrid');
+  toggleBtn.addEventListener('click', ()=>{
+    const on = kpiGrid.style.display==='grid';
+    kpiGrid.style.display = on ? 'none' : 'grid';
+    toggleBtn.textContent = on ? '詳細' : '閉じる';
+  });
+
+  const back=$('#addBack'), fab=$('#fabAdd'), closeBtn=$('#addClose'), cancelBtn=$('#addCancel'), saveBtn=$('#addSave');
+  const addName=$('#addName'), addCost=$('#addCost'), addPrice=$('#addPrice'), addPlatform=$('#addPlatform'), addTag=$('#addTag');
+
+  function openAdd(){ back.style.display='grid'; back.setAttribute('aria-hidden','false'); addName.focus(); }
+  function closeAdd(){
+    back.style.display='none'; back.setAttribute('aria-hidden','true');
+    [addName,addCost,addPrice,addPlatform].forEach(el=>el.classList.remove('invalid'));
+    addName.value=''; addCost.value=''; addPrice.value=''; addPlatform.value='未設定'; addTag.value='';
+  }
+  fab.addEventListener('click',openAdd);
+  closeBtn.addEventListener('click',closeAdd);
+  cancelBtn.addEventListener('click',closeAdd);
+  back.addEventListener('click',(e)=>{ if(e.target===back) closeAdd(); });
+  document.addEventListener('keydown',(e)=>{ if(e.key==='Escape' && back.getAttribute('aria-hidden')==='false'){ closeAdd(); }});
+
+  function validateRequired(){
+    let ok=true;
+    [addName,addCost,addPrice].forEach(el=>{
+      const isEmpty = (el.type==='number') ? (el.value==='' || isNaN(Number(el.value))) : (el.value.trim()==='');
+      if(isEmpty){ el.classList.add('invalid'); if(ok) el.focus(); ok=false; }
+      else el.classList.remove('invalid');
+    });
+    if(addPlatform.value==='未設定'){
+      addPlatform.classList.add('invalid'); if(ok) addPlatform.focus(); ok=false;
+    } else addPlatform.classList.remove('invalid');
+    return ok;
+  }
+
+  saveBtn.addEventListener('click',()=>{
+    if(!validateRequired()) return;
+    const name=addName.value.trim();
+    const cost=parseNum(addCost.value);
+    const price=parseNum(addPrice.value);
+    const platform=addPlatform.value;
+    const tag=addTag.value.trim();
+    save(true);
+    items.unshift({ id:uid(), name, cost, price, platform, tag, status:'在庫', createdAt:todayLocal(), soldAt:'', soldPrice:null });
+    localStorage.setItem(KEY, JSON.stringify(items));
+    render();
+    closeAdd();
+  });
+
+  $('#q').addEventListener('input', render);
+  $('#filterStatus').addEventListener('change', render);
+  $('#sort').addEventListener('change', render);
+
+  function dateKey(s){ return s && /^\\d{4}-\\d{2}-\\d{2}$/.test(s) ? s : ''; }
+
+  // 削除確認モーダル
+  const cBack=$('#confirmBack'), cText=$('#confirmText'), cOk=$('#confirmOk'), cCancel=$('#confirmCancel'), cClose=$('#confirmClose');
+  let pendingDeleteId=null;
+  function openConfirm(id, name){
+    pendingDeleteId=id;
+    cText.textContent = `「${name||''}」を削除する？`;
+    cBack.style.display='grid'; cBack.setAttribute('aria-hidden','false');
+  }
+  function closeConfirm(){
+    cBack.style.display='none'; cBack.setAttribute('aria-hidden','true'); pendingDeleteId=null;
+  }
+  cCancel.addEventListener('click',closeConfirm);
+  cClose.addEventListener('click',closeConfirm);
+  cBack.addEventListener('click',(e)=>{ if(e.target===cBack) closeConfirm(); });
+  cOk.addEventListener('click',()=>{
+    if(!pendingDeleteId) return;
+    save(true);
+    items = items.filter(x=>x.id!==pendingDeleteId);
+    localStorage.setItem(KEY, JSON.stringify(items));
+    closeConfirm();
+    render();
+  });
+
+  function render(){
+    prevStateJSON = JSON.stringify(items);
+    updateUndoUI();
+
+    const q=$('#q').value.toLowerCase();
+    const fs=$('#filterStatus').value;
+    const sort=$('#sort').value;
+
+    let rows=items.filter(i=> (i.name+i.tag+i.platform).toLowerCase().includes(q) && (fs==='ALL'||i.status===fs) );
+    const gp=(i)=>profit(i);
+
+    if(sort==='created_desc') rows.sort((a,b)=> (b.createdAt>a.createdAt?1:-1));
+    if(sort==='created_asc') rows.sort((a,b)=> (a.createdAt>b.createdAt?1:-1));
+    if(sort==='name_asc') rows.sort((a,b)=> (a.name||'').localeCompare(b.name||'','ja'));
+    if(sort==='sold_desc') rows.sort((a,b)=> (dateKey(b.soldAt)>dateKey(a.soldAt)?1:-1));
+    if(sort==='sold_asc') rows.sort((a,b)=> (dateKey(a.soldAt)>dateKey(b.soldAt)?1:-1));
+    if(sort==='profit_desc') rows.sort((a,b)=> gp(b)-gp(a));
+    if(sort==='price_desc') rows.sort((a,b)=> (parseNum(b.price)||0)-(parseNum(a.price)||0));
+    if(sort==='status') rows.sort((a,b)=> ['在庫','出品','オークション','売却'].indexOf(a.status)-['在庫','出品','オークション','売却'].indexOf(b.status));
+
+    const tbody=document.getElementById('body'); tbody.innerHTML='';
+    rows.forEach(i=>{
+      const tr=document.createElement('tr');
+
+      const tdOp=document.createElement('td'); tdOp.className='ops'; tdOp.setAttribute('data-label','操作');
+      const seg=document.createElement('div'); seg.className='seg';
+      ['在庫','出品','オークション','売却'].forEach(st=>{
+        const b=document.createElement('button'); b.textContent=st; if(i.status===st) b.classList.add('on');
+        b.addEventListener('click',()=>{
+          save(true);
+          i.status=st;
+          if(st==='売却'){ i.soldAt=i.soldAt||todayLocal(); i.soldPrice=parseNum(i.price)||0; }
+          else { i.soldAt=''; i.soldPrice=null; }
+          localStorage.setItem(KEY, JSON.stringify(items)); render();
+        });
+        seg.appendChild(b);
+      });
+      tdOp.appendChild(seg); tr.appendChild(tdOp);
+
+      const tdName=document.createElement('td'); tdName.setAttribute('data-label','名称');
+      tdName.contentEditable='true'; tdName.textContent=i.name;
+      tdName.addEventListener('blur',()=>{ 
+        const nv=tdName.textContent.trim();
+        if(i.name!==nv){ save(true); i.name=nv; localStorage.setItem(KEY, JSON.stringify(items)); render(); }
+      });
+      tr.appendChild(tdName);
+
+      const tdPlat=document.createElement('td'); tdPlat.setAttribute('data-label','売場');
+      const sel=document.createElement('select');
+      ['未設定','メルカリ','ヤフオク','その他'].forEach(p=>{ const op=document.createElement('option'); op.value=p; op.textContent=p; if(p===i.platform) op.selected=true; sel.appendChild(op); });
+      sel.addEventListener('change',()=>{ save(true); i.platform=sel.value; localStorage.setItem(KEY, JSON.stringify(items)); render(); });
+      tdPlat.appendChild(sel); tr.appendChild(tdPlat);
+
+      const tdTag=document.createElement('td'); tdTag.setAttribute('data-label','タグ');
+      tdTag.contentEditable='true'; tdTag.textContent=i.tag||'';
+      tdTag.addEventListener('blur',()=>{ 
+        const nv=tdTag.textContent.trim();
+        if(i.tag!==nv){ save(true); i.tag=nv; localStorage.setItem(KEY, JSON.stringify(items)); render(); }
+      });
+      tr.appendChild(tdTag);
+
+      const tdCost=document.createElement('td'); tdCost.className='num'; tdCost.setAttribute('data-label','仕入');
+      const inCost=document.createElement('input'); inCost.type='number'; inCost.value=i.cost||0; inCost.min=0; inCost.step=100;
+      inCost.addEventListener('change',()=>{ save(true); i.cost=parseNum(inCost.value); localStorage.setItem(KEY, JSON.stringify(items)); render(); });
+      tdCost.appendChild(inCost); tr.appendChild(tdCost);
+
+      const tdPrice=document.createElement('td'); tdPrice.className='num'; tdPrice.setAttribute('data-label','価格（出品/売却）');
+      const inPrice=document.createElement('input'); inPrice.type='number'; inPrice.min=0; inPrice.step=100;
+      inPrice.value=i.status==='売却' ? (i.soldPrice ?? i.price ?? 0) : (i.price ?? 0);
+      inPrice.addEventListener('change',()=>{
+        save(true);
+        const val=parseNum(inPrice.value);
+        if(i.status==='売却'){ i.soldPrice=val; } else { i.price=val; }
+        localStorage.setItem(KEY, JSON.stringify(items)); render();
+      });
+      tdPrice.appendChild(inPrice); tr.appendChild(tdPrice);
+
+      const tdProfit=document.createElement('td'); tdProfit.className='num'; tdProfit.setAttribute('data-label','粗利');
+      const gp=profit(i); tdProfit.textContent=yen(gp); tdProfit.classList.add(gp>=0?'ok':'bad'); tr.appendChild(tdProfit);
+
+      const tdSt=document.createElement('td'); tdSt.setAttribute('data-label','ステータス');
+      const pill=document.createElement('span'); pill.className='pill';
+      pill.classList.add(i.status==='在庫'?'stock':i.status==='出品'?'listed':i.status==='オークション'?'auct':'sold');
+      pill.textContent=i.status; tdSt.appendChild(pill); tr.appendChild(tdSt);
+
+      const tdSold=document.createElement('td'); tdSold.setAttribute('data-label','売却日');
+      const date=document.createElement('input'); date.type='date'; date.value=i.soldAt||'';
+      date.addEventListener('change',()=>{ save(true); i.soldAt=date.value; localStorage.setItem(KEY, JSON.stringify(items)); render(); });
+      tdSold.appendChild(date); tr.appendChild(tdSold);
+
+      const tdDel=document.createElement('td'); tdDel.className='actions'; tdDel.setAttribute('data-label','');
+      const del=document.createElement('button'); del.textContent='削除'; del.type='button';
+      del.addEventListener('click',()=> openConfirm(i.id, i.name));
+      tdDel.appendChild(del); tr.appendChild(tdDel);
+
+      tbody.appendChild(tr);
+    });
+
+    calcKPI();
+  }
+
+  render();
+})();
+</script>
+</body>
+</html>
