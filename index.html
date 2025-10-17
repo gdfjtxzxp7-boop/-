@@ -37,7 +37,7 @@
 
   .modal-back{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;place-items:center;z-index:70}
   .modal{width:min(720px,92vw);background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px}
-  .modal.small{width:min(420px,92vw)}
+  .modal.small{width:min(520px,92vw)}
   .modal header{display:flex;justify-content:space-between;align-items:center;background:transparent;padding:0 0 8px;border-bottom:1px solid var(--line)}
   .modal h2{margin:0;font-size:16px}
   .modal .body{display:grid;gap:10px;margin-top:10px}
@@ -58,6 +58,7 @@
   .iconbtn{width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;border-radius:999px;
            border:1px solid var(--line);background:#0d0f14}
   .iconbtn[disabled]{opacity:.4;pointer-events:none}
+  .undoGroup{display:flex;flex-direction:column;gap:6px} /* ←→の間で1回改行 */
 
   .kpi{display:none;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
   .kpi .panel{padding:10px}
@@ -108,19 +109,24 @@
       <span class="chip">在庫 <b id="m_items">0</b></span>
       <span class="chip">原価 <b id="m_invCost">¥0</b></span>
       <span class="chip">粗利 <b id="m_profit">¥0</b></span>
-      <button id="undoBtn" class="iconbtn" title="元に戻す（Undo）" aria-label="Undo">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-          <path d="M9 7L4 12L9 17" stroke="#cbd5e1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-          <path d="M20 18a8 8 0 0 0-8-8H4" stroke="#cbd5e1" stroke-width="2" stroke-linecap="round"/>
-        </svg>
-      </button>
-      <button id="redoBtn" class="iconbtn" title="やり直す（Redo）" aria-label="Redo">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-          <path d="M15 7L20 12L15 17" stroke="#cbd5e1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-          <path d="M4 18a8 8 0 0 1 8-8h8" stroke="#cbd5e1" stroke-width="2" stroke-linecap="round"/>
-        </svg>
-      </button>
+
+      <div class="undoGroup">
+        <button id="undoBtn" class="iconbtn" title="元に戻す（Undo）" aria-label="Undo">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+            <path d="M9 7L4 12L9 17" stroke="#cbd5e1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M20 18a8 8 0 0 0-8-8H4" stroke="#cbd5e1" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </button>
+        <button id="redoBtn" class="iconbtn" title="やり直す（Redo）" aria-label="Redo">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+            <path d="M15 7L20 12L15 17" stroke="#cbd5e1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M4 18a8 8 0 0 1 8-8h8" stroke="#cbd5e1" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+
       <button id="toggleKPI" class="chip toggle">詳細</button>
+      <button id="btnMonthly" class="chip toggle">月次</button>
     </div>
 
     <div class="kpi narrow" id="kpiGrid">
@@ -195,6 +201,24 @@
         <button id="confirmCancel" class="btn-ghost">キャンセル</button>
         <button id="confirmOk" class="btn-danger">削除</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- 月次収益モーダル -->
+<div id="monthlyBack" class="modal-back" aria-hidden="true">
+  <div class="modal small" role="dialog" aria-modal="true" aria-labelledby="monthlyTitle">
+    <header>
+      <h2 id="monthlyTitle">月次収益（粗利）</h2>
+      <button id="monthlyClose" class="btn-ghost">✕</button>
+    </header>
+    <div class="body">
+      <table>
+        <thead>
+          <tr><th>月</th><th class="nowrap">収益</th><th class="nowrap">件数</th></tr>
+        </thead>
+        <tbody id="monthlyBody"></tbody>
+      </table>
     </div>
   </div>
 </div>
@@ -292,6 +316,59 @@
     toggleBtn.textContent = on ? '詳細' : '閉じる';
   });
 
+  // 月次ボタンとモーダル
+  const monthlyBtn = $('#btnMonthly');
+  const monthlyBack = $('#monthlyBack');
+  const monthlyClose = $('#monthlyClose');
+  const monthlyBody = $('#monthlyBody');
+
+  function openMonthly(){
+    renderMonthly();
+    monthlyBack.style.display='grid';
+    monthlyBack.setAttribute('aria-hidden','false');
+  }
+  function closeMonthly(){
+    monthlyBack.style.display='none';
+    monthlyBack.setAttribute('aria-hidden','true');
+  }
+  function renderMonthly(){
+    // 売却済かつ売却日がYYYY-MM-DDのデータを集計（収益=粗利）
+    const map = new Map(); // ym -> {profit: number, count: number}
+    items.forEach(i=>{
+      if(i.status!=='売却') return;
+      const d=i.soldAt||'';
+      if(!isYMD(d)) return;
+      const ym=d.slice(0,7);
+      const p=profit(i);
+      const rec=map.get(ym)||{profit:0,count:0};
+      rec.profit += p;
+      rec.count += 1;
+      map.set(ym, rec);
+    });
+    const rows=[...map.entries()].sort((a,b)=> a[0]<b[0]?1:-1);
+    monthlyBody.innerHTML='';
+    rows.forEach(([ym, v])=>{
+      const tr=document.createElement('tr');
+      const td1=document.createElement('td'); td1.textContent=ym;
+      const td2=document.createElement('td'); td2.className='num'; td2.textContent=yen(v.profit);
+      const td3=document.createElement('td'); td3.className='num'; td3.textContent=String(v.count);
+      tr.appendChild(td1); tr.appendChild(td2); tr.appendChild(td3);
+      monthlyBody.appendChild(tr);
+    });
+    if(rows.length===0){
+      const tr=document.createElement('tr');
+      const td=document.createElement('td');
+      td.colSpan=3; td.className='muted';
+      td.textContent='売却データなし';
+      tr.appendChild(td);
+      monthlyBody.appendChild(tr);
+    }
+  }
+  monthlyBtn.addEventListener('click', openMonthly);
+  monthlyClose.addEventListener('click', closeMonthly);
+  monthlyBack.addEventListener('click',(e)=>{ if(e.target===monthlyBack) closeMonthly(); });
+  document.addEventListener('keydown',(e)=>{ if(e.key==='Escape' && monthlyBack.getAttribute('aria-hidden')==='false'){ closeMonthly(); }});
+
   const back=$('#addBack'), fab=$('#fabAdd'), closeBtn=$('#addClose'), cancelBtn=$('#addCancel'), saveBtn=$('#addSave');
   const addName=$('#addName'), addCost=$('#addCost'), addPrice=$('#addPrice'), addPlatform=$('#addPlatform'), addTag=$('#addTag');
 
@@ -380,14 +457,14 @@
       case 'created_desc': {
         rows.sort((a,b)=>{
           const c = cmpStrDesc(dateKey(a.createdAt), dateKey(b.createdAt));
-          return c!==0 ? c : (pos.get(a.id) - pos.get(b.id)); // 同日→元順（新しい方=小さいindexが先頭）
+          return c!==0 ? c : (pos.get(a.id) - pos.get(b.id));
         });
         break;
       }
       case 'created_asc': {
         rows.sort((a,b)=>{
           const c = cmpStrAsc(dateKey(a.createdAt), dateKey(b.createdAt));
-          return c!==0 ? c : (pos.get(b.id) - pos.get(a.id)); // 同日→元順の逆（古い方=大きいindexを先頭）
+          return c!==0 ? c : (pos.get(b.id) - pos.get(a.id));
         });
         break;
       }
@@ -491,8 +568,19 @@
       pill.textContent=i.status; tdSt.appendChild(pill); tr.appendChild(tdSt);
 
       const tdSold=document.createElement('td'); tdSold.setAttribute('data-label','売却日');
-      const date=document.createElement('input'); date.type='date'; date.value=i.soldAt||'';
-      date.addEventListener('change',()=>{ save(true); i.soldAt=date.value; save(false); render(); });
+      const date=document.createElement('input'); date.type='date';
+      // ステータス別の挙動：売却時のみ入力可。それ以外は空で非入力
+      if(i.status==='売却'){
+        date.value=i.soldAt||'';
+        date.disabled=false;
+      }else{
+        date.value='';
+        date.disabled=true;
+      }
+      date.addEventListener('change',()=>{
+        if(date.disabled) return;
+        save(true); i.soldAt=date.value; save(false); render();
+      });
       tdSold.appendChild(date); tr.appendChild(tdSold);
 
       const tdDel=document.createElement('td'); tdDel.className='actions'; tdDel.setAttribute('data-label','');
