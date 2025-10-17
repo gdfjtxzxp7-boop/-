@@ -78,6 +78,25 @@
   .m-profit.ok{color:var(--good)}
   .m-profit.bad{color:var(--bad)}
 
+  /* 配送セクション */
+  .ship{border:1px dashed var(--line);border-radius:12px;padding:10px}
+  .ship h3{margin:4px 0 8px;font-size:13px;color:var(--muted)}
+  .ship-tabs{display:flex;gap:6px;margin-bottom:6px}
+  .ship-tabs button{padding:6px 10px;border-radius:999px;border:1px solid var(--line);background:#0d0f14}
+  .ship-tabs button.on{background:#1e293b;border-color:#3b82f6}
+  .ship-groups{display:grid;gap:8px}
+  .ship-group{display:grid;gap:6px}
+  .ship-title{font-size:12px;color:var(--muted)}
+  .ship-methods{display:flex;flex-wrap:wrap;gap:6px}
+  .ship-methods button{border:1px solid var(--line);background:#0d0f14;color:var(--text);padding:6px 10px;border-radius:999px;font-size:12px}
+  .ship-methods button.on{background:#1e293b;border-color:#3b82f6}
+  .sizes{display:flex;flex-wrap:wrap;gap:6px}
+  .sizes button{border:1px dashed var(--line);background:#0d0f14;color:var(--text);padding:6px 10px;border-radius:999px;font-size:12px}
+  .sizes button.on{background:#1e293b;border-color:#3b82f6}
+  .ship-summary{display:flex;gap:10px;align-items:center;margin-top:6px}
+  .ship-summary .kv{font-size:12px;color:var(--muted)}
+  .ship-summary .val{font-weight:800}
+
   @media (max-width: 640px){
     h1{font-size:18px;margin:12px}
     th{top:72px}
@@ -197,6 +216,21 @@
         </select>
         <input id="addTag" type="text" placeholder="タグ（任意）">
       </div>
+
+      <!-- 配送方式 -->
+      <div class="ship">
+        <h3>配送方式</h3>
+        <div class="ship-tabs">
+          <button id="tabMercari" class="on" data-market="mercari">メルカリ</button>
+          <button id="tabYahoo" data-market="yahoo">ヤフオク</button>
+        </div>
+        <div id="shipGroups" class="ship-groups"></div>
+        <div class="ship-summary">
+          <span class="kv">選択：</span><span id="shipChoice" class="val muted">未選択</span>
+          <span class="kv">配送料：</span><span id="addShipFee" class="val">¥0</span>
+        </div>
+      </div>
+
       <div class="actions">
         <button id="addCancel" class="btn-ghost">キャンセル</button>
         <button id="addSave" class="btn-primary">保存</button>
@@ -244,7 +278,32 @@
 (()=> {
   const $ = (q)=>document.querySelector(q);
   const KEY='gem_inventory_v4';
-  const FEE_RATE=0.10, SHIP_FEE=200;
+  const FEE_RATE=0.10;         // 販売手数料（仮）
+  const DEFAULT_SHIP_FEE=0;    // 未設定時の配送料（0で粗利が歪まないようにする）
+
+  // 配送料テーブル（編集前提）
+  const RATES = {
+    mercari:{
+      yamato:{
+        fixed:{'ネコポス':210,'宅急便コンパクト':450},
+        variable:{'宅急便':{'60':750,'80':850,'100':1050,'120':1200,'140':1450,'160':1600}}
+      },
+      jp:{
+        fixed:{'ゆうパケットポストmini':160,'ゆうパケットポスト':215,'ゆうパケット':230,'ゆうパケットプラス':455},
+        variable:{'ゆうパック':{'60':750,'80':850,'100':1050,'120':1200,'140':1450,'160':1600}}
+      }
+    },
+    yahoo:{
+      yamato:{
+        fixed:{'ネコポス':200,'宅急便コンパクト':450},
+        variable:{'宅急便':{'60':750,'80':850,'100':1050,'120':1200,'140':1450,'160':1600}}
+      },
+      jp:{
+        fixed:{'ゆうパケットポストmini':150,'ゆうパケット':205,'ゆうパケットポスト':200,'ゆうパケットプラス':380},
+        variable:{'ゆうパック':{'60':750,'80':850,'100':1050,'120':1200,'140':1450,'160':1600}}
+      }
+    }
+  };
 
   // 安定比較ユーティリティ
   const hasCollator = (typeof Intl !== 'undefined' && typeof Intl.Collator === 'function');
@@ -305,14 +364,15 @@
   updateUndoUI();
 
   const effectivePrice = (i)=> parseNum(i.status==='売却' ? (i.soldPrice ?? i.price) : i.price);
-  const net = (price)=> Math.max(0, Math.round(parseNum(price) * (1 - FEE_RATE) - SHIP_FEE));
-  const profit = (i)=> net(effectivePrice(i)) - parseNum(i.cost);
+  const shipFeeOf = (i)=> parseNum(i?.shipFee ?? DEFAULT_SHIP_FEE);
+  const net = (i)=> Math.max(0, Math.round(effectivePrice(i) * (1 - FEE_RATE) - shipFeeOf(i)));
+  const profit = (i)=> net(i) - parseNum(i.cost);
 
   function calcKPI(){
     const inv=items.filter(i=>i.status!=='売却');
     const sold=items.filter(i=>i.status==='売却');
     const invCost=inv.reduce((a,b)=>a+parseNum(b.cost),0);
-    const netSales=sold.reduce((a,b)=>a+net(b.soldPrice??b.price),0);
+    const netSales=sold.reduce((a,b)=>a+net(b),0);
     const realized=sold.reduce((a,b)=>a+profit(b),0);
     const upside=inv.reduce((a,b)=>a+profit(b),0);
     $('#k_items').textContent=inv.length;
@@ -333,43 +393,30 @@
     toggleBtn.textContent = on ? '詳細' : '閉じる';
   });
 
-  // 月次ボタンとモーダル
+  // 月次
   const monthlyBtn = $('#btnMonthly');
   const monthlyBack = $('#monthlyBack');
   const monthlyClose = $('#monthlyClose');
   const monthlyList = $('#monthlyList');
   const msTotal=$('#ms_total'), msAvg=$('#ms_avg'), msBestVal=$('#ms_bestVal'), msBestYm=$('#ms_bestYm');
 
-  function openMonthly(){
-    renderMonthly();
-    monthlyBack.style.display='grid';
-    monthlyBack.setAttribute('aria-hidden','false');
-  }
-  function closeMonthly(){
-    monthlyBack.style.display='none';
-    monthlyBack.setAttribute('aria-hidden','true');
-  }
+  function openMonthly(){ renderMonthly(); monthlyBack.style.display='grid'; monthlyBack.setAttribute('aria-hidden','false'); }
+  function closeMonthly(){ monthlyBack.style.display='none'; monthlyBack.setAttribute('aria-hidden','true'); }
   function renderMonthly(){
-    // ym => {profit,count,net}
     const map = new Map();
     items.forEach(i=>{
       if(i.status!=='売却') return;
-      const d=i.soldAt||'';
-      if(!isYMD(d)) return;
+      const d=i.soldAt||''; if(!isYMD(d)) return;
       const ym=d.slice(0,7);
       const p=profit(i);
-      const n=net(i.soldPrice??i.price);
+      const n=net(i);
       const rec=map.get(ym)||{profit:0,count:0,net:0};
-      rec.profit += p;
-      rec.count += 1;
-      rec.net += n;
+      rec.profit += p; rec.count += 1; rec.net += n;
       map.set(ym, rec);
     });
-
-    const entries=[...map.entries()].sort((a,b)=> a[0]<b[0]?1:-1); // 新→旧
+    const entries=[...map.entries()].sort((a,b)=> a[0]<b[0]?1:-1);
     monthlyList.innerHTML='';
 
-    // サマリー
     const totalProfit = entries.reduce((s, [,v])=>s+v.profit, 0);
     const monthCount = entries.length||1;
     const avgProfit = Math.round(totalProfit / monthCount);
@@ -379,30 +426,22 @@
       const best = entries.reduce((best, cur)=> cur[1].profit>best[1].profit?cur:best, entries[0]);
       msBestVal.textContent = yen(best[1].profit);
       msBestYm.textContent  = best[0];
-    }else{
-      msBestVal.textContent = yen(0);
-      msBestYm.textContent  = '';
-    }
+    }else{ msBestVal.textContent = yen(0); msBestYm.textContent=''; }
 
-    // 明細カード
     entries.forEach(([ym, v])=>{
       const avg = Math.round(v.profit / (v.count||1));
-      const row = document.createElement('div');
-      row.className='mrow';
+      const row = document.createElement('div'); row.className='mrow';
       const left = document.createElement('div');
       left.innerHTML = `<div class="m-ym">${ym}</div><div class="m-sub">件数 ${v.count}・平均 ${yen(avg)}</div>`;
-      const right = document.createElement('div');
-      right.className='m-right';
+      const right = document.createElement('div'); right.className='m-right';
       right.innerHTML = `<div class="m-profit ${v.profit>=0?'ok':'bad'}">${yen(v.profit)}</div><div class="m-sub">手取り売上 ${yen(v.net)}</div>`;
       row.appendChild(left); row.appendChild(right);
       monthlyList.appendChild(row);
     });
 
     if(entries.length===0){
-      const row=document.createElement('div');
-      row.className='mrow';
-      row.innerHTML='<div class="m-sub">売却データなし</div>';
-      monthlyList.appendChild(row);
+      const row=document.createElement('div'); row.className='mrow';
+      row.innerHTML='<div class="m-sub">売却データなし</div>'; monthlyList.appendChild(row);
     }
   }
   monthlyBtn.addEventListener('click', openMonthly);
@@ -410,14 +449,25 @@
   monthlyBack.addEventListener('click',(e)=>{ if(e.target===monthlyBack) closeMonthly(); });
   document.addEventListener('keydown',(e)=>{ if(e.key==='Escape' && monthlyBack.getAttribute('aria-hidden')==='false'){ closeMonthly(); }});
 
+  // 追加モーダル
   const back=$('#addBack'), fab=$('#fabAdd'), closeBtn=$('#addClose'), cancelBtn=$('#addCancel'), saveBtn=$('#addSave');
   const addName=$('#addName'), addCost=$('#addCost'), addPrice=$('#addPrice'), addPlatform=$('#addPlatform'), addTag=$('#addTag');
 
-  function openAdd(){ back.style.display='grid'; back.setAttribute('aria-hidden','false'); addName.focus(); }
+  // 配送：状態
+  let shipSel = { market:'mercari', carrier:'yamato', method:'', size:'', fee:0 };
+
+  function openAdd(){
+    back.style.display='grid'; back.setAttribute('aria-hidden','false'); addName.focus();
+    // 売場選択とタブの同期（初期）
+    const pf=addPlatform.value;
+    if(pf==='ヤフオク'){ selectMarket('yahoo'); } else { selectMarket('mercari'); }
+  }
   function closeAdd(){
     back.style.display='none'; back.setAttribute('aria-hidden','true');
     [addName,addCost,addPrice,addPlatform].forEach(el=>el.classList.remove('invalid'));
     addName.value=''; addCost.value=''; addPrice.value=''; addPlatform.value='未設定'; addTag.value='';
+    shipSel={ market:'mercari', carrier:'yamato', method:'', size:'', fee:0 };
+    updateShipUI();
   }
   fab.addEventListener('click',openAdd);
   closeBtn.addEventListener('click',closeAdd);
@@ -445,8 +495,14 @@
     const price=parseNum(addPrice.value);
     const platform=addPlatform.value;
     const tag=addTag.value.trim();
+
+    // 保存
     save(true);
-    items.unshift({ id:uid(), name, cost, price, platform, tag, status:'在庫', createdAt:todayLocal(), soldAt:'', soldPrice:null });
+    items.unshift({
+      id:uid(), name, cost, price, platform, tag,
+      status:'在庫', createdAt:todayLocal(), soldAt:'', soldPrice:null,
+      ship:{...shipSel}, shipFee:shipSel.fee
+    });
     save(false);
     render();
     closeAdd();
@@ -455,6 +511,91 @@
   $('#q').addEventListener('input', render);
   $('#filterStatus').addEventListener('change', render);
   $('#sort').addEventListener('change', render);
+
+  // 売場変更で配送タブも同期
+  addPlatform.addEventListener('change', ()=>{
+    if(addPlatform.value==='ヤフオク') selectMarket('yahoo');
+    else if(addPlatform.value==='メルカリ') selectMarket('mercari');
+  });
+
+  // 配送UI生成
+  const shipGroups = $('#shipGroups');
+  const shipChoice = $('#shipChoice');
+  const addShipFee = $('#addShipFee');
+  $('#tabMercari').addEventListener('click', ()=>selectMarket('mercari'));
+  $('#tabYahoo').addEventListener('click', ()=>selectMarket('yahoo'));
+
+  function selectMarket(m){
+    shipSel.market=m;
+    document.querySelectorAll('.ship-tabs button').forEach(b=>b.classList.toggle('on', b.dataset.market===m));
+    // メルカリ選択時は仮でヤマト面を先頭
+    shipSel.carrier = 'yamato';
+    shipSel.method = ''; shipSel.size=''; shipSel.fee=0;
+    renderShipGroups();
+    updateShipUI();
+  }
+
+  function renderShipGroups(){
+    shipGroups.innerHTML='';
+    const table=RATES[shipSel.market];
+    const order=['yamato','jp'];
+    order.forEach(car=>{
+      const wrap=document.createElement('div'); wrap.className='ship-group';
+      const title=document.createElement('div'); title.className='ship-title';
+      title.textContent = (car==='yamato' ? 'ヤマト運輸' : '日本郵便');
+      wrap.appendChild(title);
+
+      // 固定
+      const fixedBox=document.createElement('div'); fixedBox.className='ship-methods';
+      Object.entries(table[car].fixed).forEach(([name,fee])=>{
+        const b=document.createElement('button'); b.textContent=`${name} ${yen(fee)}`;
+        b.addEventListener('click',()=>{
+          shipSel.carrier=car; shipSel.method=name; shipSel.size=''; shipSel.fee=fee;
+          updateShipUI();
+          // サイズボタンの選択解除
+          wrap.querySelectorAll('.sizes button').forEach(x=>x.classList.remove('on'));
+          // 固定の見た目
+          shipGroups.querySelectorAll('.ship-methods button').forEach(x=>x.classList.remove('on'));
+          b.classList.add('on');
+        });
+        fixedBox.appendChild(b);
+      });
+      wrap.appendChild(fixedBox);
+
+      // 可変（サイズ）
+      const varBox=document.createElement('div'); varBox.className='sizes';
+      Object.entries(table[car].variable).forEach(([mName, sizes])=>{
+        // メソッド名のダミーラベル
+        const lbl=document.createElement('span'); lbl.className='ship-title'; lbl.style.marginRight='6px';
+        lbl.textContent = mName;
+        varBox.appendChild(lbl);
+        Object.entries(sizes).forEach(([sz,fee])=>{
+          const sBtn=document.createElement('button'); sBtn.textContent=`${sz} ${yen(fee)}`;
+          sBtn.addEventListener('click',()=>{
+            shipSel.carrier=car; shipSel.method=mName; shipSel.size=sz; shipSel.fee=fee;
+            updateShipUI();
+            // サイズ選択のハイライト
+            varBox.querySelectorAll('button').forEach(x=>x.classList.remove('on'));
+            sBtn.classList.add('on');
+            // 固定側のハイライト解除
+            wrap.querySelectorAll('.ship-methods button').forEach(x=>x.classList.remove('on'));
+          });
+          varBox.appendChild(sBtn);
+        });
+      });
+      wrap.appendChild(varBox);
+
+      shipGroups.appendChild(wrap);
+    });
+  }
+
+  function updateShipUI(){
+    shipChoice.textContent = shipSel.method ? `${shipSel.method}${shipSel.size?`（${shipSel.size}）`:''}` : '未選択';
+    addShipFee.textContent = yen(shipSel.fee||0);
+  }
+
+  // 起動時に配送UIを構築
+  renderShipGroups(); updateShipUI();
 
   // 削除確認モーダル
   const cBack=$('#confirmBack'), cText=$('#confirmText'), cOk=$('#confirmOk'), cCancel=$('#confirmCancel'), cClose=$('#confirmClose');
@@ -609,18 +750,8 @@
 
       const tdSold=document.createElement('td'); tdSold.setAttribute('data-label','売却日');
       const date=document.createElement('input'); date.type='date';
-      // 売却時のみ入力可。それ以外は空で非入力
-      if(i.status==='売却'){
-        date.value=i.soldAt||'';
-        date.disabled=false;
-      }else{
-        date.value='';
-        date.disabled=true;
-      }
-      date.addEventListener('change',()=>{
-        if(date.disabled) return;
-        save(true); i.soldAt=date.value; save(false); render();
-      });
+      if(i.status==='売却'){ date.value=i.soldAt||''; date.disabled=false; } else { date.value=''; date.disabled=true; }
+      date.addEventListener('change',()=>{ if(date.disabled) return; save(true); i.soldAt=date.value; save(false); render(); });
       tdSold.appendChild(date); tr.appendChild(tdSold);
 
       const tdDel=document.createElement('td'); tdDel.className='actions'; tdDel.setAttribute('data-label','');
