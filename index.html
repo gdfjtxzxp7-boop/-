@@ -222,7 +222,7 @@
   </div>
 </div>
 
-<!-- 配送方式ピッカー（共通） -->
+<!-- 配送方式ピッカー（共通・折りたたみモーダル） -->
 <div id="shipBack" class="modal-back" aria-hidden="true">
   <div class="modal small" role="dialog" aria-modal="true" aria-labelledby="shipTitle">
     <header>
@@ -290,9 +290,10 @@
 (()=> {
   const $ = (q)=>document.querySelector(q);
   const KEY='gem_inventory_v4';
-  const FEE_RATE=0.10;
+  const FEE_RATE=0.10;          // 仮の販売手数料。必要に応じて調整
   const DEFAULT_SHIP_FEE=0;
 
+  // 料金表（固定は選択時に即適用、可変はサイズ固定の一律表）
   const RATES = {
     mercari:{
       yamato:{ fixed:{'ネコポス':210,'宅急便コンパクト':450}, variable:{'宅急便':{'60':750,'80':850,'100':1050,'120':1200,'140':1450,'160':1600}} },
@@ -304,6 +305,7 @@
     }
   };
 
+  // ---- utils ----
   const hasCollator = (typeof Intl !== 'undefined' && typeof Intl.Collator === 'function');
   const collator = hasCollator ? new Intl.Collator('ja', { numeric:true, sensitivity:'base' }) : null;
   const isYMD = (s)=> /^\d{4}-\d{2}-\d{2}$/.test(s||'');
@@ -313,19 +315,31 @@
   const cmpNumDesc = (a,b)=> (Number(b)||0) - (Number(a)||0);
   const stOrder = {'在庫':0,'出品':1,'オークション':2,'売却':3};
 
-  const todayLocal = ()=>{ const d=new Date(); const y=d.getFullYear(), m=('0'+(d.getMonth()+1)).slice(-2), day=('0'+d.getDate()).slice(-2); return `${y}-${m}-${day}`; };
+  const todayLocal = ()=>{
+    const d=new Date();
+    const y=d.getFullYear(), m=('0'+(d.getMonth()+1)).slice(-2), day=('0'+d.getDate()).slice(-2);
+    return `${y}-${m}-${day}`;
+  };
   const yen=(n)=> (Math.round(Number(n)||0)).toLocaleString('ja-JP',{style:'currency',currency:'JPY',maximumFractionDigits:0});
   const parseNum=(v)=> Math.max(0, Math.round(Number((v+'').replace(/[^\d.-]/g,''))||0));
   const uid=()=> Math.random().toString(36).slice(2,10)+Date.now().toString(36).slice(-4);
 
+  // ---- state ----
   let items = load();
   let undoStack=[], redoStack=[];
   let prevStateJSON='';
 
+  // 追加中の配送選択（折りたたみ表示用の要約のみ保持）
   let shipSel = { market:'mercari', carrier:'yamato', method:'', size:'', fee:0 };
 
-  function load(){ try{ const raw=localStorage.getItem(KEY); return raw?JSON.parse(raw):[]; }catch(_){ return []; } }
-  function save(withHistory=true){ if(withHistory){ if(prevStateJSON) undoStack.push(prevStateJSON); redoStack.length=0; updateUndoUI(); } localStorage.setItem(KEY, JSON.stringify(items)); }
+  // ---- storage / history ----
+  function load(){
+    try{ const raw=localStorage.getItem(KEY); return raw?JSON.parse(raw):[]; }catch(_){ return []; }
+  }
+  function save(withHistory=true){
+    if(withHistory){ if(prevStateJSON) undoStack.push(prevStateJSON); redoStack.length=0; updateUndoUI(); }
+    localStorage.setItem(KEY, JSON.stringify(items));
+  }
   function updateUndoUI(){ $('#undoBtn').disabled = undoStack.length===0; $('#redoBtn').disabled = redoStack.length===0; }
   function doUndo(){ if(undoStack.length===0) return; redoStack.push(JSON.stringify(items)); items = JSON.parse(undoStack.pop()); save(false); render(); }
   function doRedo(){ if(redoStack.length===0) return; undoStack.push(JSON.stringify(items)); items = JSON.parse(redoStack.pop()); save(false); render(); }
@@ -333,6 +347,7 @@
   $('#redoBtn').addEventListener('click',doRedo);
   updateUndoUI();
 
+  // ---- calc ----
   const effectivePrice = (i)=> parseNum(i.status==='売却' ? (i.soldPrice ?? i.price) : i.price);
   const shipFeeOf = (i)=> parseNum(i?.shipFee ?? DEFAULT_SHIP_FEE);
   const net = (i)=> Math.max(0, Math.round(effectivePrice(i) * (1 - FEE_RATE) - shipFeeOf(i)));
@@ -355,6 +370,7 @@
     $('#m_profit').textContent=yen(realized);
   }
 
+  // ---- KPI toggle & monthly ----
   const toggleBtn = $('#toggleKPI'), kpiGrid = $('#kpiGrid');
   toggleBtn.addEventListener('click', ()=>{ const on=kpiGrid.style.display==='grid'; kpiGrid.style.display=on?'none':'grid'; toggleBtn.textContent=on?'詳細':'閉じる'; });
 
@@ -394,6 +410,7 @@
     if(entries.length===0){ const row=document.createElement('div'); row.className='mrow'; row.innerHTML='<div class="m-sub">売却データなし</div>'; monthlyList.appendChild(row); }
   }
 
+  // ---- add modal ----
   const addBack=$('#addBack'), fab=$('#fabAdd'), addClose=$('#addClose'), addCancel=$('#addCancel'), addSave=$('#addSave');
   const addName=$('#addName'), addCost=$('#addCost'), addPrice=$('#addPrice'), addPlatform=$('#addPlatform'), addTag=$('#addTag');
   const addShipChoice=$('#addShipChoice'), addShipFee=$('#addShipFee'), openShip=$('#openShip');
@@ -409,4 +426,259 @@
   addClose.addEventListener('click',closeAdd);
   addCancel.addEventListener('click',closeAdd);
   addBack.addEventListener('click',(e)=>{ if(e.target===addBack) closeAdd(); });
-  document
+  document.addEventListener('keydown',(e)=>{ if(e.key==='Escape' && addBack.getAttribute('aria-hidden')==='false'){ closeAdd(); }});
+
+  function validateRequired(){
+    let ok=true;
+    [addName,addCost,addPrice].forEach(el=>{
+      const empty = (el.type==='number') ? (el.value==='' || isNaN(Number(el.value))) : (el.value.trim()==='');
+      if(empty){ el.classList.add('invalid'); if(ok) el.focus(); ok=false; } else el.classList.remove('invalid');
+    });
+    if(addPlatform.value==='未設定'){ addPlatform.classList.add('invalid'); if(ok) addPlatform.focus(); ok=false; } else addPlatform.classList.remove('invalid');
+    return ok;
+  }
+
+  addSave.addEventListener('click',()=>{
+    if(!validateRequired()) return;
+    const item={
+      id:uid(),
+      name:addName.value.trim(),
+      cost:parseNum(addCost.value),
+      price:parseNum(addPrice.value),
+      platform:addPlatform.value,
+      tag:addTag.value.trim(),
+      status:'在庫',
+      createdAt:todayLocal(),
+      soldAt:'', soldPrice:null,
+      ship:{...shipSel}, shipFee:shipSel.fee
+    };
+    save(true); items.unshift(item); save(false); render(); closeAdd();
+  });
+
+  $('#q').addEventListener('input', render);
+  $('#filterStatus').addEventListener('change', render);
+  $('#sort').addEventListener('change', render);
+
+  addPlatform.addEventListener('change', syncMarketWithPlatform);
+  function syncMarketWithPlatform(){
+    const pf=addPlatform.value;
+    shipSel.market = (pf==='ヤフオク') ? 'yahoo' : 'mercari';
+    // 既存選択は保持、未選択ならキャリア初期化
+    if(!shipSel.method){ shipSel.carrier='yamato'; }
+    updateAddShipSummary();
+  }
+  function updateAddShipSummary(){
+    addShipChoice.textContent = shipSel.method ? `${shipSel.method}${shipSel.size?`（${shipSel.size}）`:''}` : '未選択';
+    addShipFee.textContent = yen(shipSel.fee||0);
+  }
+
+  // ---- ship picker modal (共通) ----
+  const shipBack=$('#shipBack'), shipClose=$('#shipClose'), shipApply=$('#shipApply');
+  const shipCarrierSeg=$('#shipCarrierSeg'), shipFixed=$('#shipFixed'), shipVarMethod=$('#shipVarMethod'), shipSizes=$('#shipSizes');
+  const shipChoice=$('#shipChoice'), shipFee=$('#shipFee');
+  let shipContext=null;      // {type:'add'} or {type:'item', item:ref}
+  let tmpShip={market:'mercari', carrier:'yamato', method:'', size:'', fee:0};
+
+  openShip.addEventListener('click', ()=>{
+    shipContext={type:'add'};
+    tmpShip={...shipSel, market: shipSel.market};
+    openShipPicker(tmpShip.market);
+  });
+
+  function openShipPicker(market){
+    buildCarrierSeg(market);
+    buildFixed(market, tmpShip.carrier);
+    buildVariable(market, tmpShip.carrier);
+    updateShipSummary();
+    shipBack.style.display='grid'; shipBack.setAttribute('aria-hidden','false');
+  }
+  function closeShipPicker(){ shipBack.style.display='none'; shipBack.setAttribute('aria-hidden','true'); }
+  shipClose.addEventListener('click', closeShipPicker);
+  shipBack.addEventListener('click',(e)=>{ if(e.target===shipBack) closeShipPicker(); });
+  document.addEventListener('keydown',(e)=>{ if(e.key==='Escape' && shipBack.getAttribute('aria-hidden')==='false'){ closeShipPicker(); }});
+
+  function buildCarrierSeg(market){
+    shipCarrierSeg.innerHTML='';
+    [['yamato','ヤマト運輸'],['jp','日本郵便']].forEach(([key,label])=>{
+      const b=document.createElement('button'); b.textContent=label; if(tmpShip.carrier===key) b.classList.add('on');
+      b.addEventListener('click',()=>{ tmpShip.carrier=key; tmpShip.method=''; tmpShip.size=''; tmpShip.fee=0; buildFixed(market,key); buildVariable(market,key); updateShipSummary(); });
+      shipCarrierSeg.appendChild(b);
+    });
+  }
+  function buildFixed(market, carrier){
+    shipFixed.innerHTML='';
+    const fixed=RATES[market][carrier].fixed;
+    Object.entries(fixed).forEach(([name,fee])=>{
+      const b=document.createElement('button'); b.textContent=`${name} ${yen(fee)}`;
+      if(tmpShip.method===name && !tmpShip.size) b.classList.add('on');
+      b.addEventListener('click',()=>{ tmpShip.method=name; tmpShip.size=''; tmpShip.fee=fee; highlightFixed(name); clearSizes(); updateShipSummary(); });
+      shipFixed.appendChild(b);
+    });
+    function highlightFixed(name){ shipFixed.querySelectorAll('button').forEach(x=>x.classList.toggle('on', x.textContent.startsWith(name))); }
+  }
+  function buildVariable(market, carrier){
+    shipVarMethod.innerHTML=''; shipSizes.innerHTML='';
+    const vars=RATES[market][carrier].variable;
+    Object.keys(vars).forEach((mName,ix)=>{
+      const op=document.createElement('option'); op.value=mName; op.textContent=mName; shipVarMethod.appendChild(op);
+      if(!tmpShip.method && ix===0){ tmpShip.method=mName; }
+    });
+    if(tmpShip.method && !vars[tmpShip.method]) tmpShip.method=Object.keys(vars)[0];
+    shipVarMethod.value=tmpShip.method;
+    shipVarMethod.addEventListener('change',()=>{ tmpShip.method=shipVarMethod.value; tmpShip.size=''; tmpShip.fee=0; buildSizes(vars[tmpShip.method]); updateShipSummary(); });
+    buildSizes(vars[tmpShip.method]);
+  }
+  function buildSizes(sizeTable){
+    shipSizes.innerHTML='';
+    Object.entries(sizeTable).forEach(([sz,fee])=>{
+      const b=document.createElement('button'); b.textContent=`${sz} ${yen(fee)}`;
+      if(tmpShip.size===sz) b.classList.add('on');
+      b.addEventListener('click',()=>{ shipSizes.querySelectorAll('button').forEach(x=>x.classList.remove('on')); b.classList.add('on'); tmpShip.size=sz; tmpShip.fee=fee; updateShipSummary(); });
+      shipSizes.appendChild(b);
+    });
+  }
+  function clearSizes(){ shipSizes.innerHTML=''; }
+  function updateShipSummary(){
+    shipChoice.textContent = tmpShip.method ? `${tmpShip.method}${tmpShip.size?`（${tmpShip.size}）`:''}` : '未選択';
+    shipFee.textContent = yen(tmpShip.fee||0);
+  }
+
+  shipApply.addEventListener('click', ()=>{
+    if(shipContext?.type==='add'){
+      shipSel={...tmpShip};
+      updateAddShipSummary();
+      closeShipPicker();
+      return;
+    }
+    if(shipContext?.type==='item' && shipContext.item){
+      save(true);
+      shipContext.item.ship={...tmpShip};
+      shipContext.item.shipFee=tmpShip.fee||0;
+      save(false); render();
+      closeShipPicker();
+    }
+  });
+
+  // ---- delete confirm ----
+  const cBack=$('#confirmBack'), cText=$('#confirmText'), cOk=$('#confirmOk'), cCancel=$('#confirmCancel'), cClose=$('#confirmClose');
+  let pendingDeleteId=null;
+  function openConfirm(id, name){ pendingDeleteId=id; cText.textContent=`「${name||''}」を削除する？`; cBack.style.display='grid'; cBack.setAttribute('aria-hidden','false'); }
+  function closeConfirm(){ cBack.style.display='none'; cBack.setAttribute('aria-hidden','true'); pendingDeleteId=null; }
+  cCancel.addEventListener('click',closeConfirm);
+  cClose.addEventListener('click',closeConfirm);
+  cBack.addEventListener('click',(e)=>{ if(e.target===cBack) closeConfirm(); });
+  cOk.addEventListener('click',()=>{ if(!pendingDeleteId) return; save(true); items = items.filter(x=>x.id!==pendingDeleteId); save(false); closeConfirm(); render(); });
+
+  // ---- render table ----
+  function render(){
+    prevStateJSON = JSON.stringify(items);
+    updateUndoUI();
+
+    const q=$('#q').value.toLowerCase();
+    const fs=$('#filterStatus').value;
+    const sort=$('#sort').value;
+
+    const pos = new Map(); items.forEach((it, ix)=> pos.set(it.id, ix));
+    let rows=items.filter(i=> (i.name+i.tag+i.platform).toLowerCase().includes(q) && (fs==='ALL'||i.status===fs) );
+
+    switch (sort){
+      case 'created_desc': rows.sort((a,b)=>{ const c=cmpStrDesc(dateKey(a.createdAt),dateKey(b.createdAt)); return c!==0?c:(pos.get(a.id)-pos.get(b.id));}); break;
+      case 'created_asc':  rows.sort((a,b)=>{ const c=cmpStrAsc(dateKey(a.createdAt),dateKey(b.createdAt));  return c!==0?c:(pos.get(b.id)-pos.get(a.id));}); break;
+      case 'name_asc':     rows.sort((a,b)=> collator?collator.compare(a.name||'',b.name||''):(a.name||'').localeCompare(b.name||'','ja')); break;
+      case 'sold_desc':    rows.sort((a,b)=>{ const c=cmpStrDesc(dateKey(a.soldAt),dateKey(b.soldAt));     return c!==0?c:(pos.get(a.id)-pos.get(b.id));}); break;
+      case 'sold_asc':     rows.sort((a,b)=>{ const c=cmpStrAsc(dateKey(a.soldAt),dateKey(b.soldAt));      return c!==0?c:(pos.get(b.id)-pos.get(a.id));}); break;
+      case 'profit_desc':  rows.sort((a,b)=> cmpNumDesc(profit(a), profit(b))); break;
+      case 'price_desc':   rows.sort((a,b)=> cmpNumDesc(parseNum(a.price), parseNum(b.price))); break;
+      case 'status':       rows.sort((a,b)=> (stOrder[a.status]??99)-(stOrder[b.status]??99)); break;
+      default:             rows.sort((a,b)=>{ const c=cmpStrDesc(dateKey(a.createdAt),dateKey(b.createdAt));return c!==0?c:(pos.get(a.id)-pos.get(b.id));}); break;
+    }
+
+    const tbody=document.getElementById('body'); tbody.innerHTML='';
+    rows.forEach(i=>{
+      const tr=document.createElement('tr');
+
+      const tdOp=document.createElement('td'); tdOp.className='ops'; tdOp.setAttribute('data-label','操作');
+      const seg=document.createElement('div'); seg.className='seg';
+      ['在庫','出品','オークション','売却'].forEach(st=>{
+        const b=document.createElement('button'); b.textContent=st; if(i.status===st) b.classList.add('on');
+        b.addEventListener('click',()=>{
+          save(true);
+          i.status=st;
+          if(st==='売却'){ i.soldAt=i.soldAt||todayLocal(); i.soldPrice=parseNum(i.price)||0; }
+          else { i.soldAt=''; i.soldPrice=null; }
+          save(false); render();
+        });
+        seg.appendChild(b);
+      });
+      tdOp.appendChild(seg); tr.appendChild(tdOp);
+
+      const tdName=document.createElement('td'); tdName.setAttribute('data-label','名称');
+      tdName.contentEditable='true'; tdName.textContent=i.name;
+      tdName.addEventListener('blur',()=>{ const nv=tdName.textContent.trim(); if(i.name!==nv){ save(true); i.name=nv; save(false); render(); }});
+      tr.appendChild(tdName);
+
+      const tdPlat=document.createElement('td'); tdPlat.setAttribute('data-label','売場');
+      const sel=document.createElement('select');
+      ['未設定','メルカリ','ヤフオク','その他'].forEach(p=>{ const op=document.createElement('option'); op.value=p; op.textContent=p; if(p===i.platform) op.selected=true; sel.appendChild(op); });
+      sel.addEventListener('change',()=>{ save(true); i.platform=sel.value; // 売場変更で配送市場も切替
+        const market=(i.platform==='ヤフオク')?'yahoo':'mercari';
+        if(i.ship){ i.ship.market=market; } else { i.ship={market, carrier:'yamato', method:'', size:'', fee:0}; i.shipFee=0; }
+        save(false); render(); });
+      tdPlat.appendChild(sel); tr.appendChild(tdPlat);
+
+      const tdTag=document.createElement('td'); tdTag.setAttribute('data-label','タグ');
+      tdTag.contentEditable='true'; tdTag.textContent=i.tag||'';
+      tdTag.addEventListener('blur',()=>{ const nv=tdTag.textContent.trim(); if(i.tag!==nv){ save(true); i.tag=nv; save(false); render(); }});
+      tr.appendChild(tdTag);
+
+      const tdCost=document.createElement('td'); tdCost.className='num'; tdCost.setAttribute('data-label','仕入');
+      const inCost=document.createElement('input'); inCost.type='number'; inCost.value=i.cost||0; inCost.min=0; inCost.step=100;
+      inCost.addEventListener('change',()=>{ save(true); i.cost=parseNum(inCost.value); save(false); render(); });
+      tdCost.appendChild(inCost); tr.appendChild(tdCost);
+
+      const tdPrice=document.createElement('td'); tdPrice.className='num'; tdPrice.setAttribute('data-label','価格（出品/売却）');
+      const inPrice=document.createElement('input'); inPrice.type='number'; inPrice.min=0; inPrice.step=100;
+      inPrice.value=i.status==='売却' ? (i.soldPrice ?? i.price ?? 0) : (i.price ?? 0);
+      inPrice.addEventListener('change',()=>{ save(true); const val=parseNum(inPrice.value); if(i.status==='売却'){ i.soldPrice=val; } else { i.price=val; } save(false); render(); });
+      tdPrice.appendChild(inPrice); tr.appendChild(tdPrice);
+
+      const tdProfit=document.createElement('td'); tdProfit.className='num'; tdProfit.setAttribute('data-label','粗利');
+      const g=profit(i); tdProfit.textContent=yen(g); tdProfit.classList.add(g>=0?'ok':'bad'); tr.appendChild(tdProfit);
+
+      const tdSt=document.createElement('td'); tdSt.setAttribute('data-label','ステータス');
+      const pill=document.createElement('span'); pill.className='pill';
+      pill.classList.add(i.status==='在庫'?'stock':i.status==='出品'?'listed':i.status==='オークション'?'auct':'sold');
+      pill.textContent=i.status; tdSt.appendChild(pill); tr.appendChild(tdSt);
+
+      // 配送（各行にボタン追加）
+      const tdShip=document.createElement('td'); tdShip.setAttribute('data-label','配送');
+      const shipBtn=document.createElement('button'); shipBtn.textContent='配送方式';
+      shipBtn.addEventListener('click',()=>{
+        const market=(i.platform==='ヤフオク')?'yahoo':'mercari';
+        shipContext={type:'item', item:i};
+        tmpShip={ market, carrier:i.ship?.carrier||'yamato', method:i.ship?.method||'', size:i.ship?.size||'', fee:i.ship?.fee||i.shipFee||0 };
+        openShipPicker(market);
+      });
+      tdShip.appendChild(shipBtn); tr.appendChild(tdShip);
+
+      const tdSold=document.createElement('td'); tdSold.setAttribute('data-label','売却日');
+      const date=document.createElement('input'); date.type='date';
+      if(i.status==='売却'){ date.value=i.soldAt||''; date.disabled=false; } else { date.value=''; date.disabled=true; }
+      date.addEventListener('change',()=>{ if(date.disabled) return; save(true); i.soldAt=date.value; save(false); render(); });
+      tdSold.appendChild(date); tr.appendChild(tdSold);
+
+      const tdDel=document.createElement('td'); tdDel.className='actions'; tdDel.setAttribute('data-label','');
+      const del=document.createElement('button'); del.textContent='削除'; del.type='button'; del.addEventListener('click',()=> openConfirm(i.id, i.name));
+      tdDel.appendChild(del); tr.appendChild(tdDel);
+
+      tbody.appendChild(tr);
+    });
+
+    calcKPI();
+  }
+
+  render();
+})();
+</script>
+</body>
+</html>
