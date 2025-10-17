@@ -37,7 +37,7 @@
 
   .modal-back{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;place-items:center;z-index:70}
   .modal{width:min(720px,92vw);background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px}
-  .modal.small{width:min(520px,92vw)}
+  .modal.small{width:min(540px,92vw)}
   .modal header{display:flex;justify-content:space-between;align-items:center;background:transparent;padding:0 0 8px;border-bottom:1px solid var(--line)}
   .modal h2{margin:0;font-size:16px}
   .modal .body{display:grid;gap:10px;margin-top:10px}
@@ -52,14 +52,12 @@
   .seg button{border:1px solid var(--line);background:#0d0f14;color:var(--text);padding:8px 10px;border-radius:8px;font-size:13px}
   .seg button.on{background:#1e293b;border-color:#3b82f6;outline:2px solid #3b82f6}
 
+  /* メトリクス行と固定ドック */
   .metrics{display:flex;align-items:center;gap:10px;flex-wrap:wrap;position:relative;padding-bottom:56px}
   .chip{border:1px solid var(--line);border-radius:999px;padding:4px 10px;font-size:12px;color:var(--muted)}
-  .metrics .toggle{margin-left:0} /* 右下固定にするためauto解除 */
   .iconbtn{width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;border-radius:999px;
            border:1px solid var(--line);background:#0d0f14}
   .iconbtn[disabled]{opacity:.4;pointer-events:none}
-
-  /* 下部固定ドック */
   .dockL{position:absolute;left:10px;bottom:10px;display:flex;gap:8px}
   .dockR{position:absolute;right:10px;bottom:10px;display:flex;gap:6px}
 
@@ -67,6 +65,18 @@
   .kpi .panel{padding:10px}
   .kpi h3{margin:0 0 6px;font-size:12px;color:var(--muted);font-weight:600}
   .kpi .num{font-size:18px;font-weight:800}
+
+  /* 月次モーダルの整形 */
+  .mSummary{display:flex;gap:8px;flex-wrap:wrap}
+  .chip.big{font-size:12px;padding:6px 12px;border-radius:999px}
+  .mlist{display:grid;gap:10px}
+  .mrow{display:flex;justify-content:space-between;align-items:flex-start;border:1px solid var(--line);border-radius:14px;padding:12px}
+  .m-ym{font-weight:800}
+  .m-right{text-align:right}
+  .m-profit{font-weight:900;font-size:16px}
+  .m-sub{font-size:12px;color:var(--muted)}
+  .m-profit.ok{color:var(--good)}
+  .m-profit.bad{color:var(--bad)}
 
   @media (max-width: 640px){
     h1{font-size:18px;margin:12px}
@@ -129,7 +139,7 @@
         </button>
       </div>
 
-      <!-- 右下：詳細・月次（間隔詰め） -->
+      <!-- 右下：詳細・月次 -->
       <div class="dockR">
         <button id="toggleKPI" class="chip">詳細</button>
         <button id="btnMonthly" class="chip">月次</button>
@@ -212,7 +222,7 @@
   </div>
 </div>
 
-<!-- 月次収益モーダル -->
+<!-- 月次収益モーダル（整形版） -->
 <div id="monthlyBack" class="modal-back" aria-hidden="true">
   <div class="modal small" role="dialog" aria-modal="true" aria-labelledby="monthlyTitle">
     <header>
@@ -220,12 +230,12 @@
       <button id="monthlyClose" class="btn-ghost">✕</button>
     </header>
     <div class="body">
-      <table>
-        <thead>
-          <tr><th>月</th><th class="nowrap">収益</th><th class="nowrap">件数</th></tr>
-        </thead>
-        <tbody id="monthlyBody"></tbody>
-      </table>
+      <div class="mSummary">
+        <span class="chip big">合計 <b id="ms_total">¥0</b></span>
+        <span class="chip big">月平均 <b id="ms_avg">¥0</b></span>
+        <span class="chip big">最高 <b id="ms_bestVal">¥0</b> <small id="ms_bestYm" class="muted"></small></span>
+      </div>
+      <div id="monthlyList" class="mlist"></div>
     </div>
   </div>
 </div>
@@ -327,7 +337,8 @@
   const monthlyBtn = $('#btnMonthly');
   const monthlyBack = $('#monthlyBack');
   const monthlyClose = $('#monthlyClose');
-  const monthlyBody = $('#monthlyBody');
+  const monthlyList = $('#monthlyList');
+  const msTotal=$('#ms_total'), msAvg=$('#ms_avg'), msBestVal=$('#ms_bestVal'), msBestYm=$('#ms_bestYm');
 
   function openMonthly(){
     renderMonthly();
@@ -339,35 +350,59 @@
     monthlyBack.setAttribute('aria-hidden','true');
   }
   function renderMonthly(){
-    const map = new Map(); // ym -> {profit: number, count: number}
+    // ym => {profit,count,net}
+    const map = new Map();
     items.forEach(i=>{
       if(i.status!=='売却') return;
       const d=i.soldAt||'';
       if(!isYMD(d)) return;
       const ym=d.slice(0,7);
       const p=profit(i);
-      const rec=map.get(ym)||{profit:0,count:0};
+      const n=net(i.soldPrice??i.price);
+      const rec=map.get(ym)||{profit:0,count:0,net:0};
       rec.profit += p;
       rec.count += 1;
+      rec.net += n;
       map.set(ym, rec);
     });
-    const rows=[...map.entries()].sort((a,b)=> a[0]<b[0]?1:-1);
-    monthlyBody.innerHTML='';
-    rows.forEach(([ym, v])=>{
-      const tr=document.createElement('tr');
-      const td1=document.createElement('td'); td1.textContent=ym;
-      const td2=document.createElement('td'); td2.className='num'; td2.textContent=yen(v.profit);
-      const td3=document.createElement('td'); td3.className='num'; td3.textContent=String(v.count);
-      tr.appendChild(td1); tr.appendChild(td2); tr.appendChild(td3);
-      monthlyBody.appendChild(tr);
+
+    const entries=[...map.entries()].sort((a,b)=> a[0]<b[0]?1:-1); // 新→旧
+    monthlyList.innerHTML='';
+
+    // サマリー
+    const totalProfit = entries.reduce((s, [,v])=>s+v.profit, 0);
+    const monthCount = entries.length||1;
+    const avgProfit = Math.round(totalProfit / monthCount);
+    msTotal.textContent = yen(totalProfit);
+    msAvg.textContent   = yen(avgProfit);
+    if(entries.length){
+      const best = entries.reduce((best, cur)=> cur[1].profit>best[1].profit?cur:best, entries[0]);
+      msBestVal.textContent = yen(best[1].profit);
+      msBestYm.textContent  = best[0];
+    }else{
+      msBestVal.textContent = yen(0);
+      msBestYm.textContent  = '';
+    }
+
+    // 明細カード
+    entries.forEach(([ym, v])=>{
+      const avg = Math.round(v.profit / (v.count||1));
+      const row = document.createElement('div');
+      row.className='mrow';
+      const left = document.createElement('div');
+      left.innerHTML = `<div class="m-ym">${ym}</div><div class="m-sub">件数 ${v.count}・平均 ${yen(avg)}</div>`;
+      const right = document.createElement('div');
+      right.className='m-right';
+      right.innerHTML = `<div class="m-profit ${v.profit>=0?'ok':'bad'}">${yen(v.profit)}</div><div class="m-sub">手取り売上 ${yen(v.net)}</div>`;
+      row.appendChild(left); row.appendChild(right);
+      monthlyList.appendChild(row);
     });
-    if(rows.length===0){
-      const tr=document.createElement('tr');
-      const td=document.createElement('td');
-      td.colSpan=3; td.className='muted';
-      td.textContent='売却データなし';
-      tr.appendChild(td);
-      monthlyBody.appendChild(tr);
+
+    if(entries.length===0){
+      const row=document.createElement('div');
+      row.className='mrow';
+      row.innerHTML='<div class="m-sub">売却データなし</div>';
+      monthlyList.appendChild(row);
     }
   }
   monthlyBtn.addEventListener('click', openMonthly);
