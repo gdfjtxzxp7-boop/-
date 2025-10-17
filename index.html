@@ -82,13 +82,16 @@
   .radiochip button{border:1px solid var(--line);background:#0d0f14;color:var(--text);padding:6px 10px;border-radius:999px;font-size:12px}
   .radiochip button.on{background:#1e293b;border-color:#3b82f6}
 
-  /* サイズ選択ボトムシート */
-  .sizepicker-back{position:fixed;inset:0;display:none;place-items:end center;background:rgba(0,0,0,.25);z-index:80}
-  .sizepicker{width:min(520px,94vw);background:var(--panel);border:1px solid var(--line);border-radius:16px 16px 0 0;padding:12px 12px 16px;box-shadow:0 -10px 30px rgba(0,0,0,.35);transform:translateY(0)}
-  .sizepicker header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
-  .sizerail{display:flex;gap:8px;overflow-x:auto;padding:6px 2px}
-  .sizechip{border:1px dashed var(--line);background:#0d0f14;color:var(--text);padding:8px 12px;border-radius:999px;white-space:nowrap;flex:0 0 auto}
+  /* サイズ選択モーダル（中央表示） */
+  .sizepicker-back{position:fixed;inset:0;display:none;place-items:center;background:rgba(0,0,0,.55);z-index:80}
+  .sizepicker{width:min(440px,92vw);max-height:min(60vh,520px);overflow:hidden;background:var(--panel);
+              border:1px solid var(--line);border-radius:14px;padding:10px 12px 14px;box-shadow:0 15px 40px rgba(0,0,0,.45);animation:pop .18s ease-out}
+  .sizepicker header{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;border-bottom:1px solid var(--line);padding-bottom:6px}
+  .sizepicker h3{margin:0;font-size:14px;color:var(--muted);font-weight:600}
+  .sizerail{display:flex;gap:8px;overflow-x:auto;padding:6px 2px;scroll-snap-type:x mandatory}
+  .sizechip{border:1px dashed var(--line);background:#0d0f14;color:var(--text);padding:10px 12px;border-radius:999px;white-space:nowrap;flex:0 0 auto;scroll-snap-align:center}
   .sizechip.on{background:#1e293b;border-color:#3b82f6}
+  @keyframes pop{from{transform:scale(.97);opacity:.0}to{transform:scale(1);opacity:1}}
 
   @media (max-width: 640px){
     h1{font-size:18px;margin:12px}
@@ -251,11 +254,11 @@
   </div>
 </div>
 
-<!-- サイズ選択ボトムシート -->
+<!-- サイズ選択モーダル（中央） -->
 <div id="sizeBack" class="sizepicker-back" aria-hidden="true">
   <div class="sizepicker" role="dialog" aria-modal="true" aria-labelledby="sizeTitle">
     <header>
-      <h3 id="sizeTitle" class="muted">サイズを選択</h3>
+      <h3 id="sizeTitle">サイズを選択</h3>
       <button id="sizeClose" class="btn-ghost">✕</button>
     </header>
     <div id="sizeRail" class="sizerail"></div>
@@ -369,6 +372,7 @@
   const toggleBtn = $('#toggleKPI'), kpiGrid = $('#kpiGrid');
   toggleBtn.addEventListener('click', ()=>{ const on=kpiGrid.style.display==='grid'; kpiGrid.style.display=on?'none':'grid'; toggleBtn.textContent=on?'詳細':'閉じる'; });
 
+  // 月次
   const monthlyBtn=$('#btnMonthly'), monthlyBack=$('#monthlyBack'), monthlyClose=$('#monthlyClose'), monthlyList=$('#monthlyList');
   const msTotal=$('#ms_total'), msAvg=$('#ms_avg'), msBestVal=$('#ms_bestVal'), msBestYm=$('#ms_bestYm');
   monthlyBtn.addEventListener('click', ()=>{ renderMonthly(); monthlyBack.style.display='grid'; monthlyBack.setAttribute('aria-hidden','false'); });
@@ -402,6 +406,7 @@
     if(entries.length===0){ const row=document.createElement('div'); row.className='mrow'; row.innerHTML='<div class="m-sub">売却データなし</div>'; monthlyList.appendChild(row); }
   }
 
+  // 追加モーダル
   const addBack=$('#addBack'), fab=$('#fabAdd'), addClose=$('#addClose'), addCancel=$('#addCancel'), addSave=$('#addSave');
   const addName=$('#addName'), addCost=$('#addCost'), addPrice=$('#addPrice'), addPlatform=$('#addPlatform'), addTag=$('#addTag');
   const addShipChoice=$('#addShipChoice'), addShipFee=$('#addShipFee'), openShip=$('#openShip');
@@ -524,7 +529,7 @@
         shipVar.querySelectorAll('button').forEach(x=>x.classList.remove('on')); b.classList.add('on');
         tmpShip.method=mName; tmpShip.size=''; tmpShip.fee=0;
         shipFixed.querySelectorAll('button').forEach(x=>x.classList.remove('on'));
-        openSizePicker(vars[mName]); // サイズはボトムシートで選択
+        openSizePicker(vars[mName]);
         updateShipSummary();
       });
       shipVar.appendChild(b);
@@ -551,7 +556,7 @@
     }
   });
 
-  /* サイズ選択ボトムシート */
+  /* サイズ選択（中央モーダル） */
   const sizeBack=$('#sizeBack'), sizeClose=$('#sizeClose'), sizeRail=$('#sizeRail');
   function openSizePicker(sizeTable){
     sizeRail.innerHTML='';
@@ -563,7 +568,6 @@
       sizeRail.appendChild(btn); ix++;
     });
     sizeBack.style.display='grid'; sizeBack.setAttribute('aria-hidden','false');
-    // 選択中サイズへスムーススクロール
     requestAnimationFrame(()=>{
       const w=sizeRail.clientWidth, child=sizeRail.children[selIx]||sizeRail.firstElementChild;
       if(child){ const left=child.offsetLeft - (w/2 - child.clientWidth/2); sizeRail.scrollTo({left:Math.max(0,left), behavior:'smooth'}); }
@@ -574,7 +578,7 @@
   sizeBack.addEventListener('click', (e)=>{ if(e.target===sizeBack) closeSizePicker(); });
   document.addEventListener('keydown', (e)=>{ if(e.key==='Escape' && sizeBack.getAttribute('aria-hidden')==='false'){ closeSizePicker(); }});
 
-  /* 削除確認 */
+  // 削除確認
   const cBack=$('#confirmBack'), cText=$('#confirmText'), cOk=$('#confirmOk'), cCancel=$('#confirmCancel'), cClose=$('#confirmClose');
   let pendingDeleteId=null;
   function openConfirm(id, name){ pendingDeleteId=id; cText.textContent=`「${name||''}」を削除する？`; cBack.style.display='grid'; cBack.setAttribute('aria-hidden','false'); }
@@ -584,7 +588,7 @@
   cBack.addEventListener('click',(e)=>{ if(e.target===cBack) closeConfirm(); });
   cOk.addEventListener('click',()=>{ if(!pendingDeleteId) return; save(true); items = items.filter(x=>x.id!==pendingDeleteId); save(false); closeConfirm(); render(); });
 
-  /* テーブル描画 */
+  // テーブル描画
   function render(){
     prevStateJSON = JSON.stringify(items);
     updateUndoUI();
@@ -692,6 +696,13 @@
   }
 
   render();
+
+  function load(){
+    try{
+      const raw=localStorage.getItem(KEY);
+      return raw?JSON.parse(raw):[];
+    }catch(_){ return []; }
+  }
 })();
 </script>
 </body>
