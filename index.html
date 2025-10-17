@@ -89,9 +89,16 @@
   .sizepicker header{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;margin-bottom:6px;border-bottom:1px solid var(--line);padding-bottom:6px}
   .sizepicker header .spacer{height:1px}
   .sizepicker h3{margin:0;justify-self:center;font-size:14px;color:var(--muted);font-weight:700;letter-spacing:.2px}
-  /* ← ここで×ボタンを専用で小型化 */
-  #sizeClose{width:28px;height:28px;padding:0;border:1px solid var(--line);border-radius:8px;
-             font-size:14px;line-height:1;display:inline-flex;align-items:center;justify-content:center;color:var(--muted)}
+  /* ← ここでサイズモーダルの×だけ小さくする */
+  .sizepicker #sizeClose{
+    font-size:12px;
+    padding:2px 6px;
+    height:24px;
+    min-width:auto;
+    line-height:1;
+    border:1px solid var(--line);
+    border-radius:8px;
+  }
   .sizerail{position:relative;display:flex;gap:8px;overflow-x:auto;padding:8px 2px;scroll-snap-type:x mandatory}
   .sizerail::before,.sizerail::after{content:"";position:absolute;top:0;bottom:0;width:18px;pointer-events:none}
   .sizerail::before{left:0;background:linear-gradient(90deg,rgba(23,26,33,1),rgba(23,26,33,0))}
@@ -377,10 +384,10 @@
     $('#m_profit').textContent=yen(realized);
   }
 
-  const toggleBtn = $('#toggleKPI'), kpiGrid = $('#kpiGrid']);
+  const toggleBtn = $('#toggleKPI'), kpiGrid = $('#kpiGrid');
   toggleBtn.addEventListener('click', ()=>{ const on=kpiGrid.style.display==='grid'; kpiGrid.style.display=on?'none':'grid'; toggleBtn.textContent=on?'詳細':'閉じる'; });
 
-  // 月次
+  /* 月次 */
   const monthlyBtn=$('#btnMonthly'), monthlyBack=$('#monthlyBack'), monthlyClose=$('#monthlyClose'), monthlyList=$('#monthlyList');
   const msTotal=$('#ms_total'), msAvg=$('#ms_avg'), msBestVal=$('#ms_bestVal'), msBestYm=$('#ms_bestYm');
   monthlyBtn.addEventListener('click', ()=>{ renderMonthly(); monthlyBack.style.display='grid'; monthlyBack.setAttribute('aria-hidden','false'); });
@@ -414,9 +421,9 @@
     if(entries.length===0){ const row=document.createElement('div'); row.className='mrow'; row.innerHTML='<div class="m-sub">売却データなし</div>'; monthlyList.appendChild(row); }
   }
 
-  // 追加モーダル
+  /* 追加モーダル */
   const addBack=$('#addBack'), fab=$('#fabAdd'), addClose=$('#addClose'), addCancel=$('#addCancel'), addSave=$('#addSave']);
-  const addName=$('#addName'), addCost=$('#addCost'), addPrice=$('#addPrice'), addPlatform=$('#addPlatform'), addTag=$('#addTag');
+  const addName=$('#addName'), addCost=$('#addCost'), addPrice=$('#addPrice'), addPlatform=$('#addPlatform'), addTag=$('#addTag']);
   const addShipChoice=$('#addShipChoice'), addShipFee=$('#addShipFee'), openShip=$('#openShip');
 
   function openAdd(){ addBack.style.display='grid'; addBack.setAttribute('aria-hidden','false'); addName.focus(); syncMarketWithPlatform(); }
@@ -477,7 +484,7 @@
 
   /* 配送方式ピッカー */
   const shipBack=$('#shipBack'), shipClose=$('#shipClose'), shipApply=$('#shipApply');
-  const shipCarrierSeg=$('#shipCarrierSeg'), shipFixed=$('#shipFixed'), shipVar=$('#shipVar');
+  const shipCarrierSeg=$('#shipCarrierSeg'), shipFixed=$('#shipFixed'), shipVar=$('#shipVar']);
   const shipChoice=$('#shipChoice'), shipFee=$('#shipFee');
   let shipContext=null; let tmpShip={market:'mercari', carrier:'yamato', method:'', size:'', fee:0};
 
@@ -586,7 +593,7 @@
   sizeBack.addEventListener('click', (e)=>{ if(e.target===sizeBack) closeSizePicker(); });
   document.addEventListener('keydown', (e)=>{ if(e.key==='Escape' && sizeBack.getAttribute('aria-hidden')==='false'){ closeSizePicker(); }});
 
-  // 削除確認
+  /* 削除確認 */
   const cBack=$('#confirmBack'), cText=$('#confirmText'), cOk=$('#confirmOk'), cCancel=$('#confirmCancel'), cClose=$('#confirmClose');
   let pendingDeleteId=null;
   function openConfirm(id, name){ pendingDeleteId=id; cText.textContent=`「${name||''}」を削除する？`; cBack.style.display='grid'; cBack.setAttribute('aria-hidden','false'); }
@@ -596,7 +603,7 @@
   cBack.addEventListener('click',(e)=>{ if(e.target===cBack) closeConfirm(); });
   cOk.addEventListener('click',()=>{ if(!pendingDeleteId) return; save(true); items = items.filter(x=>x.id!==pendingDeleteId); save(false); closeConfirm(); render(); });
 
-  // テーブル描画
+  /* テーブル描画 */
   function render(){
     prevStateJSON = JSON.stringify(items);
     updateUndoUI();
