@@ -111,13 +111,6 @@
     .seg button{padding:10px 12px}
     .actions button{min-width:96px}
   }
-
-  /* サイズ選択モーダルの×を小さくする */
-  .sizepicker header #sizeClose{
-    font-size:12px;
-    padding:4px 8px;
-    line-height:1;
-  }
 </style>
 </head>
 <body>
@@ -415,8 +408,7 @@
       const right=document.createElement('div'); right.className='m-right'; right.innerHTML=`<div class="m-profit ${v.profit>=0?'ok':'bad'}">${yen(v.profit)}</div><div class="m-sub">手取り売上 ${yen(v.net)}</div>`;
       row.appendChild(left); row.appendChild(right); monthlyList.appendChild(row);
     });
-    if(entries.length===0){ const row=document.createElement('div'); row.className='mrow'; row.innerHTML='<div class="m-sub">売却データなし</div>'; monthlyList.appendChild(row);
-    }
+    if(entries.length===0){ const row=document.createElement('div'); row.className='mrow'; row.innerHTML='<div class="m-sub">売却データなし</div>'; monthlyList.appendChild(row); }
   }
 
   /* 追加モーダル */
@@ -562,7 +554,7 @@
     }
     if(shipContext?.type==='item' && shipContext.item){
       save(true);
-      shipContext.item.ship={{...tmpShip}};
+      shipContext.item.ship={...tmpShip};
       shipContext.item.shipFee=tmpShip.fee||0;
       save(false); render();
       closeShipPicker();
@@ -692,7 +684,7 @@
       });
       tdShip.appendChild(shipBtn); tr.appendChild(tdShip);
 
-      const tdSold=document.createElement('td'); tdSold.setAttribute='data-label'; tdSold.setAttribute('data-label','売却日');
+      const tdSold=document.createElement('td'); tdSold.setAttribute('data-label','売却日');
       const date=document.createElement('input'); date.type='date';
       if(i.status==='売却'){ date.value=i.soldAt||''; date.disabled=false; } else { date.value=''; date.disabled=true; }
       date.addEventListener('change',()=>{ if(date.disabled) return; save(true); i.soldAt=date.value; save(false); render(); });
