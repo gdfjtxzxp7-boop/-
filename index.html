@@ -29,6 +29,7 @@
   .toolbar{display:flex;gap:8px;flex-wrap:wrap}
   .right{margin-left:auto}
   .narrow{max-width:1100px;margin:0 auto}
+  .checkbox{width:18px;height:18px}
 
   .fab{position:fixed;right:20px;bottom:20px;z-index:60;background:#2563eb;border:none;color:white;
        padding:14px 18px;border-radius:999px;font-weight:700;box-shadow:0 10px 24px rgba(0,0,0,.35)}
@@ -51,13 +52,12 @@
   .seg button{border:1px solid var(--line);background:#0d0f14;color:var(--text);padding:8px 10px;border-radius:8px;font-size:13px}
   .seg button.on{background:#1e293b;border-color:#3b82f6;outline:2px solid #3b82f6}
 
-  /* メトリクス */
+  /* メトリクス＋ドック配置 */
   .metrics{display:flex;align-items:center;gap:10px;flex-wrap:wrap;position:relative;padding-bottom:56px}
   .chip{border:1px solid var(--line);border-radius:999px;padding:4px 10px;font-size:12px;color:var(--muted)}
-  .iconbtn{width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;border-radius:999px;
-           border:1px solid var(--line);background:#0d0f14}
+  .iconbtn{width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;border-radius:999px;border:1px solid var(--line);background:#0d0f14}
   .iconbtn[disabled]{opacity:.4;pointer-events:none}
-  .dockL{position:absolute;left:10px;bottom:10px;display:flex;flex-direction:column;gap:6px}
+  .dockL{position:absolute;left:10px;bottom:10px;display:flex;gap:8px}
   .dockR{position:absolute;right:10px;bottom:10px;display:flex;gap:6px}
 
   .kpi{display:none;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
@@ -65,7 +65,7 @@
   .kpi h3{margin:0 0 6px;font-size:12px;color:var(--muted);font-weight:600}
   .kpi .num{font-size:18px;font-weight:800}
 
-  /* 月次 */
+  /* 月次モーダル */
   .mSummary{display:flex;gap:8px;flex-wrap:wrap}
   .chip.big{font-size:12px;padding:6px 12px;border-radius:999px}
   .mlist{display:grid;gap:10px}
@@ -81,22 +81,14 @@
   .radiochip{display:flex;gap:6px;flex-wrap:wrap}
   .radiochip button{border:1px solid var(--line);background:#0d0f14;color:var(--text);padding:6px 10px;border-radius:999px;font-size:12px}
   .radiochip button.on{background:#1e293b;border-color:#3b82f6}
-  .ship-summary{display:flex;gap:10px;align-items:center}
-  .ship-summary .kv{font-size:12px;color:var(--muted)}
-  .ship-summary .val{font-weight:800}
 
-  /* サイズ・ボトムシート */
-  .sheet-back{position:fixed;inset:0;display:none;background:rgba(0,0,0,.5);z-index:80}
-  .sheet-back.show{display:block}
-  .sheet{position:absolute;left:0;right:0;bottom:0;background:var(--panel);border-top-left-radius:16px;border-top-right-radius:16px;
-         border:1px solid var(--line);transform:translateY(100%);transition:transform .22s ease-out}
-  .sheet.show{transform:translateY(0)}
-  .sheet header{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:1px solid var(--line)}
-  .sheet .body{max-height:62vh;overflow:auto;padding:10px}
-  .sizerow{display:flex;justify-content:space-between;align-items:center;border:1px solid var(--line);border-radius:12px;padding:10px;margin:8px 0}
-  .sizerow .left{font-weight:700}
-  .sizerow .right{font-weight:800}
-  .sizerow.on{outline:2px solid #3b82f6}
+  /* サイズ選択ボトムシート */
+  .sizepicker-back{position:fixed;inset:0;display:none;place-items:end center;background:rgba(0,0,0,.25);z-index:80}
+  .sizepicker{width:min(520px,94vw);background:var(--panel);border:1px solid var(--line);border-radius:16px 16px 0 0;padding:12px 12px 16px;box-shadow:0 -10px 30px rgba(0,0,0,.35);transform:translateY(0)}
+  .sizepicker header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+  .sizerail{display:flex;gap:8px;overflow-x:auto;padding:6px 2px}
+  .sizechip{border:1px dashed var(--line);background:#0d0f14;color:var(--text);padding:8px 12px;border-radius:999px;white-space:nowrap;flex:0 0 auto}
+  .sizechip.on{background:#1e293b;border-color:#3b82f6}
 
   @media (max-width: 640px){
     h1{font-size:18px;margin:12px}
@@ -150,7 +142,7 @@
             <path d="M9 7L4 12L9 17" stroke="#cbd5e1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
             <path d="M20 18a8 8 0 0 0-8-8H4" stroke="#cbd5e1" stroke-width="2" stroke-linecap="round"/>
           </svg>
-        </button>
+        </button><br/>
         <button id="redoBtn" class="iconbtn" aria-label="Redo">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
             <path d="M15 7L20 12L15 17" stroke="#cbd5e1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -180,9 +172,17 @@
     <table id="tbl">
       <thead>
         <tr>
-          <th>操作</th><th>名称</th><th>売場</th><th>タグ</th>
-          <th class="nowrap">仕入</th><th class="nowrap">価格（出品/売却）</th><th class="nowrap">粗利</th>
-          <th>ステータス</th><th class="nowrap">配送</th><th class="nowrap">売却日</th><th></th>
+          <th>操作</th>
+          <th>名称</th>
+          <th>売場</th>
+          <th>タグ</th>
+          <th class="nowrap">仕入</th>
+          <th class="nowrap">価格（出品/売却）</th>
+          <th class="nowrap">粗利</th>
+          <th>ステータス</th>
+          <th class="nowrap">配送</th>
+          <th class="nowrap">売却日</th>
+          <th></th>
         </tr>
       </thead>
       <tbody id="body"></tbody>
@@ -231,26 +231,34 @@
       <button id="shipClose" class="btn-ghost">✕</button>
     </header>
     <div class="body">
-      <div class="row"><div id="shipCarrierSeg" class="radiochip"></div></div>
-      <div class="row"><div id="shipFixed" class="radiochip"></div></div>
-      <div class="row"><div id="shipVar" class="radiochip"></div></div>
+      <div class="row">
+        <div id="shipCarrierSeg" class="radiochip"></div>
+      </div>
+      <div class="row">
+        <div id="shipFixed" class="radiochip"></div>
+      </div>
+      <div class="row">
+        <div id="shipVar" class="radiochip"></div>
+      </div>
       <div class="ship-summary">
         <span class="kv">選択：</span><span id="shipChoice" class="val muted">未選択</span>
         <span class="kv">配送料：</span><span id="shipFee" class="val">¥0</span>
       </div>
-      <div class="actions"><button id="shipApply" class="btn-primary">適用</button></div>
+      <div class="actions">
+        <button id="shipApply" class="btn-primary">適用</button>
+      </div>
     </div>
   </div>
 </div>
 
 <!-- サイズ選択ボトムシート -->
-<div id="sizeBack" class="sheet-back" aria-hidden="true">
-  <div id="sizeSheet" class="sheet" role="dialog" aria-modal="true" aria-labelledby="sizeTitle">
+<div id="sizeBack" class="sizepicker-back" aria-hidden="true">
+  <div class="sizepicker" role="dialog" aria-modal="true" aria-labelledby="sizeTitle">
     <header>
-      <h3 id="sizeTitle" style="margin:0;font-size:14px">サイズを選択</h3>
+      <h3 id="sizeTitle" class="muted">サイズを選択</h3>
       <button id="sizeClose" class="btn-ghost">✕</button>
     </header>
-    <div class="body" id="sizeList"></div>
+    <div id="sizeRail" class="sizerail"></div>
   </div>
 </div>
 
@@ -296,7 +304,6 @@
   const FEE_RATE=0.10;
   const DEFAULT_SHIP_FEE=0;
 
-  // 料金表
   const RATES = {
     mercari:{
       yamato:{ fixed:{'ネコポス':210,'宅急便コンパクト':450}, variable:{'宅急便':{'60':750,'80':850,'100':1050,'120':1200,'140':1450,'160':1600}} },
@@ -308,7 +315,8 @@
     }
   };
 
-  const collator = (typeof Intl!=='undefined'&&typeof Intl.Collator==='function')?new Intl.Collator('ja',{numeric:true,sensitivity:'base'}):null;
+  const hasCollator = (typeof Intl !== 'undefined' && typeof Intl.Collator === 'function');
+  const collator = hasCollator ? new Intl.Collator('ja', { numeric:true, sensitivity:'base' }) : null;
   const isYMD = (s)=> /^\d{4}-\d{2}-\d{2}$/.test(s||'');
   const dateKey = (s)=> isYMD(s) ? s : '';
   const cmpStrAsc  = (a,b)=> collator ? collator.compare(a||'', b||'') : String(a||'').localeCompare(b||'', 'ja');
@@ -320,15 +328,21 @@
   const parseNum=(v)=> Math.max(0, Math.round(Number((v+'').replace(/[^\d.-]/g,''))||0));
   const uid=()=> Math.random().toString(36).slice(2,10)+Date.now().toString(36).slice(-4);
 
-  let items = load(); let undoStack=[], redoStack=[]; let prevStateJSON='';
+  let items = load();
+  let undoStack=[], redoStack=[]; let prevStateJSON='';
   let shipSel = { market:'mercari', carrier:'yamato', method:'', size:'', fee:0 };
 
   function load(){ try{ const raw=localStorage.getItem(KEY); return raw?JSON.parse(raw):[]; }catch(_){ return []; } }
-  function save(withHistory=true){ if(withHistory){ if(prevStateJSON) undoStack.push(prevStateJSON); redoStack.length=0; updateUndoUI(); } localStorage.setItem(KEY, JSON.stringify(items)); }
+  function save(withHistory=true){
+    if(withHistory){ if(prevStateJSON) undoStack.push(prevStateJSON); redoStack.length=0; updateUndoUI(); }
+    localStorage.setItem(KEY, JSON.stringify(items));
+  }
   function updateUndoUI(){ $('#undoBtn').disabled = undoStack.length===0; $('#redoBtn').disabled = redoStack.length===0; }
   function doUndo(){ if(undoStack.length===0) return; redoStack.push(JSON.stringify(items)); items = JSON.parse(undoStack.pop()); save(false); render(); }
   function doRedo(){ if(redoStack.length===0) return; undoStack.push(JSON.stringify(items)); items = JSON.parse(redoStack.pop()); save(false); render(); }
-  $('#undoBtn').addEventListener('click',doUndo); $('#redoBtn').addEventListener('click',doRedo); updateUndoUI();
+  $('#undoBtn').addEventListener('click',doUndo);
+  $('#redoBtn').addEventListener('click',doRedo);
+  updateUndoUI();
 
   const effectivePrice = (i)=> parseNum(i.status==='売却' ? (i.soldPrice ?? i.price) : i.price);
   const shipFeeOf = (i)=> parseNum(i?.shipFee ?? DEFAULT_SHIP_FEE);
@@ -342,14 +356,17 @@
     const netSales=sold.reduce((a,b)=>a+net(b),0);
     const realized=sold.reduce((a,b)=>a+profit(b),0);
     const upside=inv.reduce((a,b)=>a+profit(b),0);
-    $('#k_items').textContent=inv.length; $('#k_invCost').textContent=yen(invCost);
-    $('#k_netSales').textContent=yen(netSales); $('#k_profit').textContent=yen(realized);
+    $('#k_items').textContent=inv.length;
+    $('#k_invCost').textContent=yen(invCost);
+    $('#k_netSales').textContent=yen(netSales);
+    $('#k_profit').textContent=yen(realized);
     const u=$('#k_upside'); if(u){u.textContent=yen(upside); u.classList.toggle('ok',upside>0); u.classList.toggle('bad',upside<0);}
-    $('#m_items').textContent=inv.length; $('#m_invCost').textContent=yen(invCost); $('#m_profit').textContent=yen(realized);
+    $('#m_items').textContent=inv.length;
+    $('#m_invCost').textContent=yen(invCost);
+    $('#m_profit').textContent=yen(realized);
   }
 
-  // KPI・月次
-  const toggleBtn=$('#toggleKPI'), kpiGrid=$('#kpiGrid');
+  const toggleBtn = $('#toggleKPI'), kpiGrid = $('#kpiGrid');
   toggleBtn.addEventListener('click', ()=>{ const on=kpiGrid.style.display==='grid'; kpiGrid.style.display=on?'none':'grid'; toggleBtn.textContent=on?'詳細':'閉じる'; });
 
   const monthlyBtn=$('#btnMonthly'), monthlyBack=$('#monthlyBack'), monthlyClose=$('#monthlyClose'), monthlyList=$('#monthlyList');
@@ -371,7 +388,8 @@
     monthlyList.innerHTML='';
     const totalProfit = entries.reduce((s, [,v])=>s+v.profit, 0);
     const monthCount = entries.length||1;
-    msTotal.textContent=yen(totalProfit); msAvg.textContent=yen(Math.round(totalProfit/monthCount));
+    msTotal.textContent=yen(totalProfit);
+    msAvg.textContent=yen(Math.round(totalProfit/monthCount));
     if(entries.length){ const best=entries.reduce((b,c)=> c[1].profit>b[1].profit?c:b, entries[0]); msBestVal.textContent=yen(best[1].profit); msBestYm.textContent=best[0]; }
     else { msBestVal.textContent=yen(0); msBestYm.textContent=''; }
     entries.forEach(([ym,v])=>{
@@ -384,7 +402,6 @@
     if(entries.length===0){ const row=document.createElement('div'); row.className='mrow'; row.innerHTML='<div class="m-sub">売却データなし</div>'; monthlyList.appendChild(row); }
   }
 
-  // 追加モーダル
   const addBack=$('#addBack'), fab=$('#fabAdd'), addClose=$('#addClose'), addCancel=$('#addCancel'), addSave=$('#addSave');
   const addName=$('#addName'), addCost=$('#addCost'), addPrice=$('#addPrice'), addPlatform=$('#addPlatform'), addTag=$('#addTag');
   const addShipChoice=$('#addShipChoice'), addShipFee=$('#addShipFee'), openShip=$('#openShip');
@@ -415,10 +432,14 @@
   addSave.addEventListener('click',()=>{
     if(!validateRequired()) return;
     const item={
-      id:uid(), name:addName.value.trim(),
-      cost:parseNum(addCost.value), price:parseNum(addPrice.value),
-      platform:addPlatform.value, tag:addTag.value.trim(),
-      status:'在庫', createdAt:todayLocal(),
+      id:uid(),
+      name:addName.value.trim(),
+      cost:parseNum(addCost.value),
+      price:parseNum(addPrice.value),
+      platform:addPlatform.value,
+      tag:addTag.value.trim(),
+      status:'在庫',
+      createdAt:todayLocal(),
       soldAt:'', soldPrice:null,
       ship:{...shipSel}, shipFee:shipSel.fee
     };
@@ -441,37 +462,13 @@
     addShipFee.textContent = yen(shipSel.fee||0);
   }
 
-  // 配送ピッカー
+  /* 配送方式ピッカー */
   const shipBack=$('#shipBack'), shipClose=$('#shipClose'), shipApply=$('#shipApply');
   const shipCarrierSeg=$('#shipCarrierSeg'), shipFixed=$('#shipFixed'), shipVar=$('#shipVar');
   const shipChoice=$('#shipChoice'), shipFee=$('#shipFee');
   let shipContext=null; let tmpShip={market:'mercari', carrier:'yamato', method:'', size:'', fee:0};
 
-  // サイズ・ボトムシート
-  const sizeBack=$('#sizeBack'), sizeSheet=$('#sizeSheet'), sizeList=$('#sizeList'), sizeTitle=$('#sizeTitle'), sizeClose=$('#sizeClose');
-  function openSizeSheet(title, sizeTable){
-    sizeTitle.textContent=title+' のサイズ';
-    sizeList.innerHTML='';
-    Object.entries(sizeTable).forEach(([sz,fee])=>{
-      const row=document.createElement('button'); row.type='button'; row.className='sizerow';
-      row.innerHTML=`<div class="left">${sz} サイズ</div><div class="right">${yen(fee)}</div>`;
-      if(tmpShip.size===sz) row.classList.add('on');
-      row.addEventListener('click',()=>{
-        sizeList.querySelectorAll('.sizerow').forEach(x=>x.classList.remove('on'));
-        row.classList.add('on');
-        tmpShip.size=sz; tmpShip.fee=fee; updateShipSummary();
-        closeSizeSheet();
-      });
-      sizeList.appendChild(row);
-    });
-    sizeBack.classList.add('show'); sizeSheet.classList.add('show'); sizeBack.setAttribute('aria-hidden','false');
-  }
-  function closeSizeSheet(){ sizeSheet.classList.remove('show'); sizeBack.classList.remove('show'); sizeBack.setAttribute('aria-hidden','true'); }
-  sizeBack.addEventListener('click',(e)=>{ if(e.target===sizeBack) closeSizeSheet(); });
-  sizeClose.addEventListener('click', closeSizeSheet);
-
-  // 追加モーダル側ボタン
-  $('#openShip').addEventListener('click', ()=>{
+  openShip.addEventListener('click', ()=>{
     shipContext={type:'add'};
     tmpShip={...shipSel, market: shipSel.market};
     openShipPicker(tmpShip.market);
@@ -510,8 +507,7 @@
       if(tmpShip.method===name && !tmpShip.size) b.classList.add('on');
       b.addEventListener('click',()=>{
         tmpShip.method=name; tmpShip.size=''; tmpShip.fee=fee;
-        shipFixed.querySelectorAll('button').forEach(x=>x.classList.remove('on'));
-        b.classList.add('on');
+        shipFixed.querySelectorAll('button').forEach(x=>x.classList.remove('on')); b.classList.add('on');
         shipVar.querySelectorAll('button').forEach(x=>x.classList.remove('on'));
         updateShipSummary();
       });
@@ -525,47 +521,78 @@
       const b=document.createElement('button'); b.textContent=mName;
       if(tmpShip.method===mName && tmpShip.size) b.classList.add('on');
       b.addEventListener('click',()=>{
-        shipVar.querySelectorAll('button').forEach(x=>x.classList.remove('on'));
-        b.classList.add('on');
+        shipVar.querySelectorAll('button').forEach(x=>x.classList.remove('on')); b.classList.add('on');
         tmpShip.method=mName; tmpShip.size=''; tmpShip.fee=0;
         shipFixed.querySelectorAll('button').forEach(x=>x.classList.remove('on'));
-        openSizeSheet(mName, vars[mName]); // 押したらボトムシートでサイズ選択
+        openSizePicker(vars[mName]); // サイズはボトムシートで選択
         updateShipSummary();
       });
       shipVar.appendChild(b);
     });
   }
   function updateShipSummary(){
-    $('#shipChoice').textContent = tmpShip.method ? `${tmpShip.method}${tmpShip.size?`（${tmpShip.size}）`:''}` : '未選択';
-    $('#shipFee').textContent = yen(tmpShip.fee||0);
+    shipChoice.textContent = tmpShip.method ? `${tmpShip.method}${tmpShip.size?`（${tmpShip.size}）`:''}` : '未選択';
+    shipFee.textContent = yen(tmpShip.fee||0);
   }
 
-  $('#shipApply').addEventListener('click', ()=>{
+  shipApply.addEventListener('click', ()=>{
     if(shipContext?.type==='add'){
-      shipSel={...tmpShip}; updateAddShipSummary(); closeShipPicker(); return;
+      shipSel={...tmpShip};
+      updateAddShipSummary();
+      closeShipPicker();
+      return;
     }
     if(shipContext?.type==='item' && shipContext.item){
       save(true);
       shipContext.item.ship={...tmpShip};
       shipContext.item.shipFee=tmpShip.fee||0;
-      save(false); render(); closeShipPicker();
+      save(false); render();
+      closeShipPicker();
     }
   });
 
-  // 削除確認
+  /* サイズ選択ボトムシート */
+  const sizeBack=$('#sizeBack'), sizeClose=$('#sizeClose'), sizeRail=$('#sizeRail');
+  function openSizePicker(sizeTable){
+    sizeRail.innerHTML='';
+    let ix=0, selIx=0;
+    Object.entries(sizeTable).forEach(([sz,fee])=>{
+      const btn=document.createElement('button'); btn.className='sizechip'; btn.textContent=`${sz} ${yen(fee)}`;
+      if(tmpShip.size===sz){ btn.classList.add('on'); selIx=ix; }
+      btn.addEventListener('click',()=>{ tmpShip.size=sz; tmpShip.fee=fee; updateShipSummary(); closeSizePicker(); });
+      sizeRail.appendChild(btn); ix++;
+    });
+    sizeBack.style.display='grid'; sizeBack.setAttribute('aria-hidden','false');
+    // 選択中サイズへスムーススクロール
+    requestAnimationFrame(()=>{
+      const w=sizeRail.clientWidth, child=sizeRail.children[selIx]||sizeRail.firstElementChild;
+      if(child){ const left=child.offsetLeft - (w/2 - child.clientWidth/2); sizeRail.scrollTo({left:Math.max(0,left), behavior:'smooth'}); }
+    });
+  }
+  function closeSizePicker(){ sizeBack.style.display='none'; sizeBack.setAttribute('aria-hidden','true'); }
+  sizeClose.addEventListener('click', closeSizePicker);
+  sizeBack.addEventListener('click', (e)=>{ if(e.target===sizeBack) closeSizePicker(); });
+  document.addEventListener('keydown', (e)=>{ if(e.key==='Escape' && sizeBack.getAttribute('aria-hidden')==='false'){ closeSizePicker(); }});
+
+  /* 削除確認 */
   const cBack=$('#confirmBack'), cText=$('#confirmText'), cOk=$('#confirmOk'), cCancel=$('#confirmCancel'), cClose=$('#confirmClose');
   let pendingDeleteId=null;
   function openConfirm(id, name){ pendingDeleteId=id; cText.textContent=`「${name||''}」を削除する？`; cBack.style.display='grid'; cBack.setAttribute('aria-hidden','false'); }
   function closeConfirm(){ cBack.style.display='none'; cBack.setAttribute('aria-hidden','true'); pendingDeleteId=null; }
-  cCancel.addEventListener('click',closeConfirm); cClose.addEventListener('click',closeConfirm);
+  cCancel.addEventListener('click',closeConfirm);
+  cClose.addEventListener('click',closeConfirm);
   cBack.addEventListener('click',(e)=>{ if(e.target===cBack) closeConfirm(); });
   cOk.addEventListener('click',()=>{ if(!pendingDeleteId) return; save(true); items = items.filter(x=>x.id!==pendingDeleteId); save(false); closeConfirm(); render(); });
 
-  // テーブル描画
+  /* テーブル描画 */
   function render(){
-    prevStateJSON = JSON.stringify(items); updateUndoUI();
+    prevStateJSON = JSON.stringify(items);
+    updateUndoUI();
 
-    const q=$('#q').value.toLowerCase(), fs=$('#filterStatus').value, sort=$('#sort').value;
+    const q=$('#q').value.toLowerCase();
+    const fs=$('#filterStatus').value;
+    const sort=$('#sort').value;
+
     const pos = new Map(); items.forEach((it, ix)=> pos.set(it.id, ix));
     let rows=items.filter(i=> (i.name+i.tag+i.platform).toLowerCase().includes(q) && (fs==='ALL'||i.status===fs) );
 
@@ -663,15 +690,6 @@
 
     calcKPI();
   }
-
-  // 削除確認
-  const cBack=$('#confirmBack'), cText=$('#confirmText'), cOk=$('#confirmOk'), cCancel=$('#confirmCancel'), cClose=$('#confirmClose');
-  let pendingDeleteId=null;
-  function openConfirm(id, name){ pendingDeleteId=id; cText.textContent=`「${name||''}」を削除する？`; cBack.style.display='grid'; cBack.setAttribute('aria-hidden','false'); }
-  function closeConfirm(){ cBack.style.display='none'; cBack.setAttribute('aria-hidden','true'); pendingDeleteId=null; }
-  cCancel.addEventListener('click',closeConfirm); cClose.addEventListener('click',closeConfirm);
-  cBack.addEventListener('click',(e)=>{ if(e.target===cBack) closeConfirm(); });
-  cOk.addEventListener('click',()=>{ if(!pendingDeleteId) return; save(true); items = items.filter(x=>x.id!==pendingDeleteId); save(false); closeConfirm(); render(); });
 
   render();
 })();
