@@ -222,7 +222,7 @@
   </div>
 </div>
 
-<!-- 配送方式ピッカー（共通・折りたたみモーダル） -->
+<!-- 配送方式ピッカー（共通） -->
 <div id="shipBack" class="modal-back" aria-hidden="true">
   <div class="modal small" role="dialog" aria-modal="true" aria-labelledby="shipTitle">
     <header>
@@ -290,10 +290,9 @@
 (()=> {
   const $ = (q)=>document.querySelector(q);
   const KEY='gem_inventory_v4';
-  const FEE_RATE=0.10;          // 仮の販売手数料。必要に応じて調整
+  const FEE_RATE=0.10;
   const DEFAULT_SHIP_FEE=0;
 
-  // 料金表（固定は選択時に即適用、可変はサイズ固定の一律表）
   const RATES = {
     mercari:{
       yamato:{ fixed:{'ネコポス':210,'宅急便コンパクト':450}, variable:{'宅急便':{'60':750,'80':850,'100':1050,'120':1200,'140':1450,'160':1600}} },
@@ -305,7 +304,6 @@
     }
   };
 
-  // ---- utils ----
   const hasCollator = (typeof Intl !== 'undefined' && typeof Intl.Collator === 'function');
   const collator = hasCollator ? new Intl.Collator('ja', { numeric:true, sensitivity:'base' }) : null;
   const isYMD = (s)=> /^\d{4}-\d{2}-\d{2}$/.test(s||'');
@@ -324,18 +322,12 @@
   const parseNum=(v)=> Math.max(0, Math.round(Number((v+'').replace(/[^\d.-]/g,''))||0));
   const uid=()=> Math.random().toString(36).slice(2,10)+Date.now().toString(36).slice(-4);
 
-  // ---- state ----
   let items = load();
   let undoStack=[], redoStack=[];
   let prevStateJSON='';
-
-  // 追加中の配送選択（折りたたみ表示用の要約のみ保持）
   let shipSel = { market:'mercari', carrier:'yamato', method:'', size:'', fee:0 };
 
-  // ---- storage / history ----
-  function load(){
-    try{ const raw=localStorage.getItem(KEY); return raw?JSON.parse(raw):[]; }catch(_){ return []; }
-  }
+  function load(){ try{ const raw=localStorage.getItem(KEY); return raw?JSON.parse(raw):[]; }catch(_){ return []; } }
   function save(withHistory=true){
     if(withHistory){ if(prevStateJSON) undoStack.push(prevStateJSON); redoStack.length=0; updateUndoUI(); }
     localStorage.setItem(KEY, JSON.stringify(items));
@@ -347,7 +339,6 @@
   $('#redoBtn').addEventListener('click',doRedo);
   updateUndoUI();
 
-  // ---- calc ----
   const effectivePrice = (i)=> parseNum(i.status==='売却' ? (i.soldPrice ?? i.price) : i.price);
   const shipFeeOf = (i)=> parseNum(i?.shipFee ?? DEFAULT_SHIP_FEE);
   const net = (i)=> Math.max(0, Math.round(effectivePrice(i) * (1 - FEE_RATE) - shipFeeOf(i)));
@@ -370,8 +361,7 @@
     $('#m_profit').textContent=yen(realized);
   }
 
-  // ---- KPI toggle & monthly ----
-  const toggleBtn = $('#toggleKPI'), kpiGrid = $('#kpiGrid');
+  const toggleBtn=$('#toggleKPI'), kpiGrid=$('#kpiGrid');
   toggleBtn.addEventListener('click', ()=>{ const on=kpiGrid.style.display==='grid'; kpiGrid.style.display=on?'none':'grid'; toggleBtn.textContent=on?'詳細':'閉じる'; });
 
   const monthlyBtn=$('#btnMonthly'), monthlyBack=$('#monthlyBack'), monthlyClose=$('#monthlyClose'), monthlyList=$('#monthlyList');
@@ -391,14 +381,12 @@
     });
     const entries=[...map.entries()].sort((a,b)=> a[0]<b[0]?1:-1);
     monthlyList.innerHTML='';
-
     const totalProfit = entries.reduce((s, [,v])=>s+v.profit, 0);
     const monthCount = entries.length||1;
     msTotal.textContent=yen(totalProfit);
     msAvg.textContent=yen(Math.round(totalProfit/monthCount));
     if(entries.length){ const best=entries.reduce((b,c)=> c[1].profit>b[1].profit?c:b, entries[0]); msBestVal.textContent=yen(best[1].profit); msBestYm.textContent=best[0]; }
     else { msBestVal.textContent=yen(0); msBestYm.textContent=''; }
-
     entries.forEach(([ym,v])=>{
       const avg=Math.round(v.profit/(v.count||1));
       const row=document.createElement('div'); row.className='mrow';
@@ -406,11 +394,9 @@
       const right=document.createElement('div'); right.className='m-right'; right.innerHTML=`<div class="m-profit ${v.profit>=0?'ok':'bad'}">${yen(v.profit)}</div><div class="m-sub">手取り売上 ${yen(v.net)}</div>`;
       row.appendChild(left); row.appendChild(right); monthlyList.appendChild(row);
     });
-
     if(entries.length===0){ const row=document.createElement('div'); row.className='mrow'; row.innerHTML='<div class="m-sub">売却データなし</div>'; monthlyList.appendChild(row); }
   }
 
-  // ---- add modal ----
   const addBack=$('#addBack'), fab=$('#fabAdd'), addClose=$('#addClose'), addCancel=$('#addCancel'), addSave=$('#addSave');
   const addName=$('#addName'), addCost=$('#addCost'), addPrice=$('#addPrice'), addPlatform=$('#addPlatform'), addTag=$('#addTag');
   const addShipChoice=$('#addShipChoice'), addShipFee=$('#addShipFee'), openShip=$('#openShip');
@@ -463,7 +449,6 @@
   function syncMarketWithPlatform(){
     const pf=addPlatform.value;
     shipSel.market = (pf==='ヤフオク') ? 'yahoo' : 'mercari';
-    // 既存選択は保持、未選択ならキャリア初期化
     if(!shipSel.method){ shipSel.carrier='yamato'; }
     updateAddShipSummary();
   }
@@ -472,11 +457,10 @@
     addShipFee.textContent = yen(shipSel.fee||0);
   }
 
-  // ---- ship picker modal (共通) ----
   const shipBack=$('#shipBack'), shipClose=$('#shipClose'), shipApply=$('#shipApply');
   const shipCarrierSeg=$('#shipCarrierSeg'), shipFixed=$('#shipFixed'), shipVarMethod=$('#shipVarMethod'), shipSizes=$('#shipSizes');
   const shipChoice=$('#shipChoice'), shipFee=$('#shipFee');
-  let shipContext=null;      // {type:'add'} or {type:'item', item:ref}
+  let shipContext=null;
   let tmpShip={market:'mercari', carrier:'yamato', method:'', size:'', fee:0};
 
   openShip.addEventListener('click', ()=>{
@@ -501,7 +485,13 @@
     shipCarrierSeg.innerHTML='';
     [['yamato','ヤマト運輸'],['jp','日本郵便']].forEach(([key,label])=>{
       const b=document.createElement('button'); b.textContent=label; if(tmpShip.carrier===key) b.classList.add('on');
-      b.addEventListener('click',()=>{ tmpShip.carrier=key; tmpShip.method=''; tmpShip.size=''; tmpShip.fee=0; buildFixed(market,key); buildVariable(market,key); updateShipSummary(); });
+      // ▼修正：クリック時に選択ハイライトを確実に更新
+      b.addEventListener('click',()=>{
+        tmpShip.carrier=key; tmpShip.method=''; tmpShip.size=''; tmpShip.fee=0;
+        shipCarrierSeg.querySelectorAll('button').forEach(x=>x.classList.remove('on'));
+        b.classList.add('on');
+        buildFixed(market,key); buildVariable(market,key); updateShipSummary();
+      });
       shipCarrierSeg.appendChild(b);
     });
   }
@@ -525,7 +515,7 @@
     });
     if(tmpShip.method && !vars[tmpShip.method]) tmpShip.method=Object.keys(vars)[0];
     shipVarMethod.value=tmpShip.method;
-    shipVarMethod.addEventListener('change',()=>{ tmpShip.method=shipVarMethod.value; tmpShip.size=''; tmpShip.fee=0; buildSizes(vars[tmpShip.method]); updateShipSummary(); });
+    shipVarMethod.onchange=()=>{ tmpShip.method=shipVarMethod.value; tmpShip.size=''; tmpShip.fee=0; buildSizes(vars[tmpShip.method]); updateShipSummary(); };
     buildSizes(vars[tmpShip.method]);
   }
   function buildSizes(sizeTable){
@@ -559,7 +549,6 @@
     }
   });
 
-  // ---- delete confirm ----
   const cBack=$('#confirmBack'), cText=$('#confirmText'), cOk=$('#confirmOk'), cCancel=$('#confirmCancel'), cClose=$('#confirmClose');
   let pendingDeleteId=null;
   function openConfirm(id, name){ pendingDeleteId=id; cText.textContent=`「${name||''}」を削除する？`; cBack.style.display='grid'; cBack.setAttribute('aria-hidden','false'); }
@@ -569,7 +558,6 @@
   cBack.addEventListener('click',(e)=>{ if(e.target===cBack) closeConfirm(); });
   cOk.addEventListener('click',()=>{ if(!pendingDeleteId) return; save(true); items = items.filter(x=>x.id!==pendingDeleteId); save(false); closeConfirm(); render(); });
 
-  // ---- render table ----
   function render(){
     prevStateJSON = JSON.stringify(items);
     updateUndoUI();
@@ -620,7 +608,7 @@
       const tdPlat=document.createElement('td'); tdPlat.setAttribute('data-label','売場');
       const sel=document.createElement('select');
       ['未設定','メルカリ','ヤフオク','その他'].forEach(p=>{ const op=document.createElement('option'); op.value=p; op.textContent=p; if(p===i.platform) op.selected=true; sel.appendChild(op); });
-      sel.addEventListener('change',()=>{ save(true); i.platform=sel.value; // 売場変更で配送市場も切替
+      sel.addEventListener('change',()=>{ save(true); i.platform=sel.value;
         const market=(i.platform==='ヤフオク')?'yahoo':'mercari';
         if(i.ship){ i.ship.market=market; } else { i.ship={market, carrier:'yamato', method:'', size:'', fee:0}; i.shipFee=0; }
         save(false); render(); });
@@ -650,7 +638,6 @@
       pill.classList.add(i.status==='在庫'?'stock':i.status==='出品'?'listed':i.status==='オークション'?'auct':'sold');
       pill.textContent=i.status; tdSt.appendChild(pill); tr.appendChild(tdSt);
 
-      // 配送（各行にボタン追加）
       const tdShip=document.createElement('td'); tdShip.setAttribute('data-label','配送');
       const shipBtn=document.createElement('button'); shipBtn.textContent='配送方式';
       shipBtn.addEventListener('click',()=>{
