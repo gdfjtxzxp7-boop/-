@@ -112,8 +112,8 @@
     .actions button{min-width:96px}
   }
 
-  /* ここだけ変更：サイズ選択モーダルの×を小さく */
-  .sizepicker header #sizeClose{font-size:12px;padding:4px 8px;line-height:1}
+  /* 変更点：サイズ選択モーダルの×だけ小さく */
+  #sizeClose{font-size:12px;padding:4px 8px;line-height:1}
 </style>
 </head>
 <body>
@@ -225,7 +225,7 @@
         <span class="muted">選択 <b id="addShipChoice">未選択</b>／送料 <b id="addShipFee">¥0</b></span>
       </div>
       <div class="actions">
-        <!-- キャンセル削除 -->
+        <!-- 要望通りキャンセル削除 -->
         <button id="addSave" class="btn-primary">保存</button>
       </div>
     </div>
@@ -240,15 +240,9 @@
       <button id="shipClose" class="btn-ghost">✕</button>
     </header>
     <div class="body">
-      <div class="row">
-        <div id="shipCarrierSeg" class="radiochip"></div>
-      </div>
-      <div class="row">
-        <div id="shipFixed" class="radiochip"></div>
-      </div>
-      <div class="row">
-        <div id="shipVar" class="radiochip"></div>
-      </div>
+      <div class="row"><div id="shipCarrierSeg" class="radiochip"></div></div>
+      <div class="row"><div id="shipFixed" class="radiochip"></div></div>
+      <div class="row"><div id="shipVar" class="radiochip"></div></div>
       <div class="ship-summary">
         <span class="kv">選択：</span><span id="shipChoice" class="val muted">未選択</span>
         <span class="kv">配送料：</span><span id="shipFee" class="val">¥0</span>
