@@ -84,7 +84,7 @@
 
   /* サイズ選択モーダル（中央・整列調整） */
   .sizepicker-back{position:fixed;inset:0;display:none;place-items:center;background:rgba(0,0,0,.55);z-index:80}
-  .sizepicker{width:min(440px,92vw);max-height:min(62vh,520px);overflow:hidden;background:var(--panel);
+  .sizepicker{width:min(440px,92vw);max-height:min(62vh,520px);overflow:visible;background:var(--panel);
               border:1px solid var(--line);border-radius:14px;padding:10px 12px 14px;box-shadow:0 15px 40px rgba(0,0,0,.45);animation:pop .18s ease-out}
   /* サイズ選択モーダルヘッダー：中央寄せ＋右端の×は自動幅にする */
   .sizepicker header{
@@ -98,11 +98,19 @@
   }
   .sizepicker header .spacer{height:1px}
   .sizepicker h3{margin:0;justify-self:center;font-size:14px;color:var(--muted);font-weight:700;letter-spacing:.2px}
-  .sizerail{position:relative;display:flex;gap:8px;overflow-x:auto;padding:8px 2px;scroll-snap-type:x mandatory}
-  .sizerail::before,.sizerail::after{content:"";position:absolute;top:0;bottom:0;width:18px;pointer-events:none}
-  .sizerail::before{left:0;background:linear-gradient(90deg,rgba(23,26,33,1),rgba(23,26,33,0))}
-  .sizerail::after{right:0;background:linear-gradient(270deg,rgba(23,26,33,1),rgba(23,26,33,0))}
-  .sizechip{border:1px solid var(--line);background:#0d0f14;color:var(--text);padding:10px 12px;border-radius:999px;white-space:nowrap;flex:0 0 auto;scroll-snap-align:center;min-width:72px}
+  /* hide the horizontal scrollbar and wrap size chips on multiple rows */
+  .sizerail{
+    position:relative;
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+    justify-content:center;
+    /* wrap the size chips onto multiple rows and disable scrollbars entirely */
+    overflow:visible;
+    padding:8px 2px;
+  }
+  /* no scrollbar styling needed when overflow is visible */
+  .sizechip{border:1px solid var(--line);background:#0d0f14;color:var(--text);padding:10px 12px;border-radius:999px;white-space:nowrap;flex:0 0 auto;min-width:72px}
   .sizechip.on{background:#1e293b;border-color:#3b82f6;box-shadow:0 0 0 2px rgba(59,130,246,.25) inset}
   @keyframes pop{from{transform:scale(.97);opacity:.0}to{transform:scale(1);opacity:1}}
 
