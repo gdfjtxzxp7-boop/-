@@ -4,10 +4,11 @@
 <meta charset="utf-8">
 <title>在庫管理システム</title>
 <!-- PWA manifest and icons -->
-<link rel="manifest" href="manifest.webmanifest">
+<!-- Use absolute paths with repository prefix (/-/) for GitHub Pages -->
+<link rel="manifest" href="/-/manifest.webmanifest">
 <meta name="theme-color" content="#111111">
-<link rel="icon" href="icons/icon-192.png" sizes="192x192">
-<link rel="apple-touch-icon" sizes="180x180" href="icons/icon-180.png">
+<link rel="icon" href="/-/icons/icon-192.png" sizes="192x192">
+<link rel="apple-touch-icon" sizes="180x180" href="/-/icons/icon-180.png">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
   :root{ --bg:#0f1115; --panel:#171a21; --muted:#9aa4b2; --text:#e6e9ef; --accent:#6ae3ff; --line:#232734; --good:#7ee787; --bad:#ff6b6b; }
@@ -739,7 +740,8 @@
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function() {
-    navigator.serviceWorker.register('/sw.js').catch(function(err) {
+    // Register service worker with repository prefix so it can be found on GitHub Pages
+    navigator.serviceWorker.register('/-/sw.js', { scope: '/-/' }).catch(function(err) {
       console.error('Service Worker registration failed:', err);
     });
   });
